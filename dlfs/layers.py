@@ -3,10 +3,25 @@ from scipy import signal
 
 class Layer:
 
-    def forward(self):
+    def __init__(self) -> None:
+        """
+        Layer abstract base class.
+
+        Attributes
+        ----------
+        output : np.ndarray
+            Output of the layer.
+
+        dinputs : np.ndarray
+            Gradient with respect to inputs used in backpropagation.
+        """
+        self.output: np.ndarray
+        self.dinputs: np.ndarray
+
+    def forward(self, inputs) -> None:
         pass
 
-    def backward(self):
+    def backward(self, delta) -> None:
         pass
 
 class DenseLayer(Layer):
@@ -39,7 +54,7 @@ class DenseLayer(Layer):
 
     def forward(self, inputs: np.ndarray) -> None:
         """
-        Forward pass using the layer. Creates output attribute.
+        Forward pass using the dense layer. Creates output attribute.
 
         Parameters
         ----------
@@ -57,7 +72,7 @@ class DenseLayer(Layer):
 
     def backward(self, delta: np.ndarray) -> None:
         """
-        Backward pass using the layer. Creates gradient attributes with respect to layer weights, biases and inputs.
+        Backward pass using the dense layer. Creates gradient attributes with respect to layer weights, biases and inputs.
 
         Parameters
         ----------

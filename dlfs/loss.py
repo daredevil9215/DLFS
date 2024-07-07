@@ -2,6 +2,17 @@ import numpy as np
 
 class Loss:
 
+    def __init__(self) -> None:
+        """
+        Loss function abstract base class.
+
+        Attributes
+        ----------
+        dinputs : None
+            Gradient with respect to inputs used in backpropagation.
+        """
+        self.dinputs = None
+
     def calculate(self) -> float:
         pass
     

@@ -2,10 +2,25 @@ import numpy as np
 
 class Activation:
 
-    def forward(self):
+    def __init__(self) -> None:
+        """
+        Activation function abstract base class.
+
+        Attributes
+        ----------
+        output : None
+            Output of the activation function.
+
+        dinputs : None
+            Gradient with respect to inputs used in backpropagation.
+        """
+        self.output = None
+        self.dinputs = None
+
+    def forward(self) -> None:
         pass
 
-    def backward(self):
+    def backward(self) -> None:
         pass
 
 class Linear(Activation):
