@@ -1,22 +1,9 @@
 import numpy as np
 
 class Layer:
-
-    def __init__(self) -> None:
-        """
-        Layer abstract base class.
-
-        Attributes
-        ----------
-        output : np.ndarray
-            Output of the layer.
-
-        dinputs : np.ndarray
-            Gradient with respect to inputs used in backpropagation.
-        """
-        self.output: np.ndarray = None
-        self.dinputs: np.ndarray = None
-
+    """
+    Layer abstract base class.
+    """
     def forward(self, inputs: np.ndarray) -> None:
         pass
 
@@ -24,22 +11,9 @@ class Layer:
         pass
 
 class Activation:
-
-    def __init__(self) -> None:
-        """
-        Activation function abstract base class.
-
-        Attributes
-        ----------
-        output : np.ndarray
-            Output of the activation function.
-
-        dinputs : np.ndarray
-            Gradient with respect to inputs used in backpropagation.
-        """
-        self.output: np.ndarray = None
-        self.dinputs: np.ndarray = None
-
+    """
+    Activation function abstract base class.
+    """
     def forward(self, inputs: np.ndarray) -> None:
         pass
 
@@ -47,18 +21,9 @@ class Activation:
         pass
 
 class Loss:
-
-    def __init__(self) -> None:
-        """
-        Loss function abstract base class.
-
-        Attributes
-        ----------
-        dinputs : np.ndarray
-            Gradient with respect to inputs used in backpropagation.
-        """
-        self.dinputs: np.ndarray = None
-
+    """
+    Loss function abstract base class.
+    """
     def calculate(self, y_pred: np.ndarray, y_true: np.ndarray) -> float:
         pass
     
@@ -66,12 +31,9 @@ class Loss:
         pass
 
 class Optimizer:
-
-    def __init__(self) -> None:
-        """
-        Optimizer abstract base class.
-        """
-
+    """
+    Optimizer abstract base class.
+    """
     def update_parameters(self) -> None:
         pass
 

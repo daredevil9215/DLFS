@@ -82,7 +82,7 @@ class Model:
 
         # Loop through all layers
         for layer in self.layers:
-            # If the layer has weights attribute we can update it
+            # If the layer has weights or kernels attribute we can update it
             if hasattr(layer, 'weights') or hasattr(layer, 'kernels'):
                 self.optimizer.update_layer_parameters(layer)
 
