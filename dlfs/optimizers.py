@@ -1,18 +1,6 @@
 import numpy as np
-from .layers import *
-
-class Optimizer:
-
-    def __init__(self) -> None:
-        """
-        Optimizer abstract base class.
-        """
-
-    def update_parameters(self) -> None:
-        pass
-
-    def update_layer_parameters(self) -> None:
-        pass
+from .base import Optimizer, Layer
+from .layers import DenseLayer, ConvolutionalLayer
 
 class Optimizer_SGD(Optimizer):
 

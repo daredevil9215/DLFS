@@ -1,8 +1,5 @@
 import numpy as np
-from .loss import Loss
-from .optimizers import Optimizer
-from .layers import Layer
-from .activation import Activation  
+from .base import Layer, Activation, Loss, Optimizer
 
 class Model:
 

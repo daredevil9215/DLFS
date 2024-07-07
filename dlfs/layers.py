@@ -1,28 +1,6 @@
 import numpy as np
 from scipy import signal
-
-class Layer:
-
-    def __init__(self) -> None:
-        """
-        Layer abstract base class.
-
-        Attributes
-        ----------
-        output : np.ndarray
-            Output of the layer.
-
-        dinputs : np.ndarray
-            Gradient with respect to inputs used in backpropagation.
-        """
-        self.output: np.ndarray
-        self.dinputs: np.ndarray
-
-    def forward(self, inputs) -> None:
-        pass
-
-    def backward(self, delta) -> None:
-        pass
+from .base import Layer
 
 class DenseLayer(Layer):
     
