@@ -65,7 +65,7 @@ class DenseLayer(Layer):
         self.dbiases = np.sum(delta, axis=0)
         self.dinputs = np.dot(delta, self.weights.T)
 
-class ConvolutionalLayer:
+class ConvolutionalLayer(Layer):
 
     def __init__(self, input_shape: tuple, output_depth: int, kernel_size: int) -> None:
         """
@@ -93,7 +93,19 @@ class ConvolutionalLayer:
         self.kernels = np.random.randn(*self.kernels_shape)
         self.biases = np.random.randn(*self.output_shape)
 
-    def forward(self, inputs):
+    def forward(self, inputs: np.ndarray) -> None:
+        """
+        Forward pass using the convolutional layer. Creates output attribute.
+
+        Parameters
+        ----------
+        inputs : numpy.ndarray
+            Input matrix.
+
+        Returns
+        -------
+        None
+        """
         # Number of samples, first dimension
         n_samples = inputs.shape[0]
         self.inputs = inputs
@@ -107,14 +119,43 @@ class ConvolutionalLayer:
                 for k in range(n_samples):
                     self.output[k, i] += signal.correlate2d(self.inputs[k, j], self.kernels[i, j], mode="valid")
             
-    def backward(self, delta):
+    def backward(self, delta: np.ndarray) -> None:
+        """
+        Backward pass using the convolutional layer. Creates gradient attributes with respect to kernels, biases and inputs.
+
+        Parameters
+        ----------
+        delta : np.ndarray
+            Accumulated gradient obtained by backpropagation.
+
+        Returns
+        -------
+        None
+        """
         self.dkernels = np.zeros(self.kernels.shape)
         self.dbiases = np.zeros(self.biases.shape)
         self.dinputs = np.zeros(self.inputs.shape)
+        n_samples = self.inputs.shape[0]
 
         for i in range(self.output_depth):
             for j in range(self.input_depth):
-                for k in range(len(self.inputs)):
+                for k in range(n_samples):
                     self.dkernels[i, j] += signal.correlate2d(self.inputs[k, j], delta[k, j], "valid")
                     self.dbiases[i] += delta[k, j]
                     self.dinputs[k, j] += signal.convolve2d(delta[k, j], self.kernels[i, j], "full")
+
+class FlattenLayer(Layer):
+
+    def __init__(self, input_shape, output_shape) -> None:
+        self.input_shape = input_shape
+        self.output_shape = output_shape
+
+    def forward(self, inputs):
+        # converts [batch_size, channels, width, height] to [batch_size, channels * width * heigth]
+        batch_size = inputs.shape[0]
+        self.output = np.reshape(inputs, (batch_size, self.output_shape))
+
+    def backward(self, delta):
+        # converts [batch_size, channels * width * heigth] to [batch_size, channels, width, height]
+        batch_size = delta.shape[0]
+        self.dinputs = np.reshape(delta, (batch_size, *self.input_shape))
