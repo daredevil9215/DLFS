@@ -88,7 +88,7 @@ class Model:
 
         self.optimizer.update_parameters()
 
-    def train(self, X: np.ndarray, y: np.ndarray, iterations: int = 1000, print_every: int = None) -> None:
+    def train(self, X: np.ndarray, y: np.ndarray, epochs: int = 1000, print_every: int = None) -> None:
         """
         Train the model.
 
@@ -100,8 +100,8 @@ class Model:
         y : np.ndarray
             Output values.
 
-        iterations : int, default=1000
-            Number of training iterations.
+        epochs : int, default=1000
+            Number of training epochs.
 
         print_every : int, default=None
             If given an integer, prints loss value.
@@ -111,14 +111,14 @@ class Model:
         None
         """
 
-        for i in range(iterations):
+        for i in range(epochs + 1):
 
             # Forward pass
             self._forward(X)
 
             if print_every is not None:
                 if not i % print_every:
-                    print(f'Loss: {self.loss_function.calculate(self.output, y)}')
+                    print(f'===== EPOCH : {i} ===== LOSS : {self.loss_function.calculate(self.output, y)} =====')
 
             # Backward pass
             self._backward(y)
