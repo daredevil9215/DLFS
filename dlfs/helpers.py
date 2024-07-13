@@ -3,7 +3,6 @@ import numpy as np
 def dilate(arr: np.ndarray, stride: int) -> np.ndarray:
     """
     Expands boundaries of an array by adding rows and columns of zeros between array elements.
-    Number of rows and columns between two elements is stride - 1.
 
     Parameters
     ----------
@@ -12,7 +11,7 @@ def dilate(arr: np.ndarray, stride: int) -> np.ndarray:
 
     stride : int
         Number of zeroes added between a pair of elements.
-        NOTE: stride - 1 zeros are added.
+        NOTE: stride - 1 zeros are added between elements.
 
     Returns
     -------
