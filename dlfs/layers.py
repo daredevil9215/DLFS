@@ -69,38 +69,42 @@ class DenseLayer(Layer):
 
 class ConvolutionalLayer(Layer):
 
-    def __init__(self, input_shape: tuple, output_channels: int, kernel_size: int, stride: int = 1) -> None:
+    def __init__(self, input_shape: tuple, output_channels: int, kernel_size: int, stride: int = 1, padding: int = 0) -> None:
         """
         Convolutional layer.
 
         Parameters
         ----------
         input_shape : tuple
-            Dimension of a single sample processed by the layer. For images it's (channels, height, width).
+            Dimension of a single sample processed by the layer. For images it's (channels, width, height).
 
         output_channels : int
-            Depth of the output array.
+            Number of channels of the output array.
 
         kernel_size : int
-            Dimension of a single kernel, a square array of shape (kernel_size, kernel_size).
+            Dimension of a single kernel, square array of shape (kernel_size, kernel_size).
 
         stride : int, default=1
             Step size at which the kernel moves across the input.
+
+        padding : int, default=0
+            Amount of padding added to input.
         """
-        # Unpack the input_shape tuple
-        input_channels, input_height, input_width = input_shape
+        # Unpack input_shape tuple
+        input_channels, input_width, input_height = input_shape
 
         self.input_channels = input_channels
         self.output_channels = output_channels
         self.kernel_size = kernel_size
         self.stride = stride
+        self.padding = padding
 
-        # Calculate output height and width
-        output_height = int(floor((input_height - kernel_size) / stride) + 1) 
-        output_width = int(floor((input_width - kernel_size) / stride) + 1)
+        # Calculate output width and height
+        output_width = int(floor((input_width - kernel_size + 2 * padding) / stride) + 1)
+        output_height = int(floor((input_height - kernel_size + + 2 * padding) / stride) + 1) 
 
         # Create output and kernel shapes
-        self.output_shape = (output_channels, output_height, output_width)
+        self.output_shape = (output_channels, output_width, output_height)
         self.kernels_shape = (output_channels, input_channels, kernel_size, kernel_size)
 
         # Initialize layer parameters
@@ -137,7 +141,11 @@ class ConvolutionalLayer(Layer):
             for j in range(self.output_channels):
                 for k in range(self.input_channels):
                     # Output is the cross correlation in valid mode between the input and kernel
-                    self.output[i, j] += signal.correlate2d(self.inputs[i, k], self.kernels[j, k], mode="valid")[::self.stride, ::self.stride]
+                    if self.padding:
+                        inputs = np.pad(self.inputs[i, k], pad_width=self.padding, mode='constant')
+                    else:
+                        inputs = self.inputs[i, k].copy()
+                    self.output[i, j] += signal.correlate2d(inputs, self.kernels[j, k], mode="valid")[::self.stride, ::self.stride]
             
     def backward(self, delta: np.ndarray) -> None:
         """
@@ -155,6 +163,10 @@ class ConvolutionalLayer(Layer):
         # Initialize gradient attributes
         self.dkernels = np.zeros(self.kernels.shape)
         self.dbiases = np.zeros(self.biases.shape)
+        """if self.padding:
+            input_shape = list(self.inputs.shape)
+            input_shape[2] += 2 * self.padding
+            input_shape[3] += 2 * self.padding"""
         self.dinputs = np.zeros(self.inputs.shape)
 
         # Number of samples, first dimension
@@ -169,42 +181,61 @@ class ConvolutionalLayer(Layer):
             for j in range(self.output_channels):
                 for k in range(self.input_channels):
 
-                    if self.stride == 1:
-                        # Gradient with respect to kernels is the valid correlaton between input and delta
-                        self.dkernels[j, k] += signal.correlate2d(self.inputs[i, k], delta[i, j], "valid")
-                        # Gradient with respect to inputs is the full convolution between delta and kernel
-                        self.dinputs[i, k] += signal.convolve2d(delta[i, j], self.kernels[j, k], "full")
+                    if self.padding:
+                        
+                        input_padded = np.pad(self.inputs[i, k], pad_width=self.padding)
 
-                    # If stride is bigger than 1, dilation of delta is required
+                        if self.stride == 1:
+                            dkernels = self._calculate_kernel_gradient(input_padded, delta[i, j], stride=False)
+                            dinputs = self._calculate_input_gradient(delta[i, j], self.kernels[j, k], stride=False)
+                            dinputs = dinputs[self.padding:-self.padding, self.padding:-self.padding]
+                        else:
+                            dkernels = self._calculate_kernel_gradient(input_padded, delta[i, j], stride=True)
+                            dinputs = self._calculate_input_gradient(delta[i, j], self.kernels[j, k], stride=True)
+                            dinputs = dinputs[self.padding:-self.padding, self.padding:-self.padding]
+
                     else:
-
-                        delta_dilated = dilate(delta[i, j], stride=self.stride)
-
-                        delta_dilated_shape = delta_dilated.shape
-                        input_shape = self.inputs[i, k].shape[0]
-                        kernel_shape = self.dkernels[j, k].shape[0]
-
-                        if delta_dilated_shape == input_shape - kernel_shape + 1:
-                            # If dilated delta shape matches the needed correlation shape gradient is computed
-                            dkernel = signal.correlate2d(self.inputs[i, k], delta_dilated, "valid")
+                        if self.stride == 1:
+                            dkernels = self._calculate_kernel_gradient(self.inputs[i, k], delta[i, j], stride=False)
+                            # Gradient with respect to inputs is the full convolution between delta and kernel
+                            dinputs = self._calculate_input_gradient(delta[i, j], self.kernels[j, k], stride=False)
                         else:
-                            # If dilated delta shape doesn't match the needed correlation shape padding is needed
-                            new_delta_shape = (input_shape - kernel_shape + 1, input_shape - kernel_shape + 1)
-                            delta_dilated_padded = pad_to_shape(delta_dilated, new_delta_shape)
-                            dkernel = signal.correlate2d(self.inputs[i, k], delta_dilated_padded, "valid")
+                            dkernels = self._calculate_kernel_gradient(self.inputs[i, k], delta[i, j], stride=True)
+                            dinputs = self._calculate_input_gradient(delta[i, j], self.kernels[j, k], stride=True)
+
                             
-                        self.dkernels[j, k] += dkernel
+                    self.dkernels[j, k] += dkernels
+                    self.dinputs[i, k] += dinputs
 
-                        # Full convolution between dilated delta and kernel similar to stride=1
-                        dinput = signal.convolve2d(delta_dilated, self.kernels[j, k], "full")
+    def _calculate_kernel_gradient(self, inputs: np.ndarray, delta: np.ndarray, stride=False):
 
-                        if dinput.shape == self.dinputs[i, k].shape:
-                            # If the shape of convolution result is equal to input gradient shape they can be summed
-                            self.dinputs[i, k] += dinput
-                        else:
-                            # If the shapes are not equal, padding of result is needed to match the input gradient shape
-                            dinput_padded = pad_to_shape(dinput, self.dinputs[i, k].shape)
-                            self.dinputs[i, k] += dinput_padded
+        if stride:
+            delta_dilated = dilate(delta, stride=self.stride)
+            delta_dilated_shape = delta_dilated.shape
+
+            input_shape = self.inputs.shape[-1]
+            kernel_shape = self.kernels_shape[-1]
+            padding = self.padding
+
+            if delta_dilated_shape == input_shape - kernel_shape + 2 * padding + 1:
+                # If dilated delta shape matches the needed correlation shape gradient is computed
+                dkernels = signal.correlate2d(inputs, delta_dilated, "valid")
+            else:
+                # If dilated delta shape doesn't match the needed correlation shape padding is needed
+                new_delta_shape = (input_shape - self.kernel_size + 2 * self.padding + 1, input_shape - kernel_shape + 2*self.padding + 1)
+                delta_dilated = pad_to_shape(delta_dilated, new_delta_shape)
+                dkernels = signal.correlate2d(inputs, delta_dilated, "valid")
+        else:
+            dkernels = signal.correlate2d(inputs, delta, "valid")
+        return dkernels
+
+    def _calculate_input_gradient(self, delta: np.ndarray, kernel: np.ndarray, stride=False):
+        if stride:
+            delta_dilated = dilate(delta, stride=self.stride)
+            dinputs = signal.convolve2d(delta_dilated, kernel, "full")
+        else:
+            dinputs = signal.convolve2d(delta, kernel, "full")
+        return dinputs
 
 class ReshapeLayer(Layer):
 

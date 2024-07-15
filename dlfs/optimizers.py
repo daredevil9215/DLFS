@@ -59,26 +59,46 @@ class Optimizer_SGD(Optimizer):
 
         if self.momentum:
 
-            # If the layer doesn't have momentum attribute initialize it
-            if not hasattr(layer, 'weight_momentum') and isinstance(layer, DenseLayer):
-                layer.weight_momentum = np.zeros_like(layer.weights)
-                layer.bias_momentum = np.zeros_like(layer.biases)
+            if isinstance(layer, DenseLayer):
 
-            layer.weight_momentum = self.momentum * layer.weight_momentum - self._current_learning_rate * layer.dweights
-            layer.bias_momentum = self.momentum * layer.bias_momentum - self._current_learning_rate * layer.dbiases
+                # If the layer doesn't have momentum attribute initialize it
+                if not hasattr(layer, 'weight_momentum'):
+                    layer.weight_momentum = np.zeros_like(layer.weights)
+                    layer.bias_momentum = np.zeros_like(layer.biases)
 
-            weight_updates = layer.weight_momentum
-            bias_updates = layer.bias_momentum
+                layer.weight_momentum = self.momentum * layer.weight_momentum - self._current_learning_rate * layer.dweights
+                layer.bias_momentum = self.momentum * layer.bias_momentum - self._current_learning_rate * layer.dbiases
+
+                weight_updates = layer.weight_momentum
+                bias_updates = layer.bias_momentum
+
+            elif isinstance(layer, ConvolutionalLayer):
+
+                # If the layer doesn't have momentum attribute initialize it
+                if not hasattr(layer, 'kernel_momentum'):
+                    layer.kernel_momentum = np.zeros_like(layer.kernels)
+                    layer.bias_momentum = np.zeros_like(layer.biases)
+
+                layer.kernel_momentum = self.momentum * layer.kernel_momentum - self._current_learning_rate * layer.dkernels
+                layer.bias_momentum = self.momentum * layer.bias_momentum - self._current_learning_rate * layer.dbiases
+
+                kernel_updates = layer.kernel_momentum
+                bias_updates = layer.bias_momentum
+
 
         else:
 
             # If there is no momentum update weights using vanilla gradient descent
             if isinstance(layer, DenseLayer):
                 weight_updates = -self._current_learning_rate * layer.dweights
-                layer.weights += weight_updates
+                bias_updates = -self._current_learning_rate * layer.dbiases
             elif isinstance(layer, ConvolutionalLayer):
                 kernel_updates = -self._current_learning_rate * layer.dkernels
-                layer.kernels += kernel_updates
+                bias_updates = -self._current_learning_rate * layer.dbiases
 
-            bias_updates = -self._current_learning_rate * layer.dbiases
+        if isinstance(layer, DenseLayer):
+            layer.weights += weight_updates
+            layer.biases += bias_updates
+        elif isinstance(layer, ConvolutionalLayer):
+            layer.kernels += kernel_updates
             layer.biases += bias_updates
