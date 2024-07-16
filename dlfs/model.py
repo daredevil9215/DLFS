@@ -1,15 +1,16 @@
+from typing import Union
 import numpy as np
 from .base import Layer, Activation, Loss, Optimizer
 
 class Model:
 
-    def __init__(self, layers: list[Layer | Activation] = None, loss_function: Loss = None, optimizer: Optimizer = None) -> None:
+    def __init__(self, layers: list[Union[Layer, Activation]] = None, loss_function: Loss = None, optimizer: Optimizer = None) -> None:
         """
         Neural network model.
 
         Parameters
         ----------
-        layers : list, default=None
+        layers : list[Union[Layer, Activation]], default=None
             List of layers and activation functions.
 
         loss_function : Loss, default=None
