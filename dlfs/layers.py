@@ -1,8 +1,8 @@
-from math import floor
 import numpy as np
 from scipy import signal
 from .base import Layer
-from .helpers import dilate, pad_to_shape
+from .helpers import dilate, pad_to_shape, timeit
+from time import time
 
 class DenseLayer(Layer):
     
@@ -91,7 +91,7 @@ class ConvolutionalLayer(Layer):
             Amount of padding added to input.
         """
         # Unpack input_shape tuple
-        input_channels, input_width, input_height = input_shape
+        input_channels, input_height, input_width = input_shape
 
         self.input_channels = input_channels
         self.output_channels = output_channels
@@ -100,11 +100,11 @@ class ConvolutionalLayer(Layer):
         self.padding = padding
 
         # Calculate output width and height
+        output_height = int((input_height - kernel_size + 2 * padding) / stride) + 1
         output_width = int((input_width - kernel_size + 2 * padding) / stride) + 1
-        output_height = int((input_height - kernel_size + + 2 * padding) / stride) + 1
 
         # Create output and kernel shapes
-        self.output_shape = (output_channels, output_width, output_height)
+        self.output_shape = (output_channels, output_height, output_width)
         self.kernels_shape = (output_channels, input_channels, kernel_size, kernel_size)
 
         # Initialize layer parameters
@@ -146,7 +146,7 @@ class ConvolutionalLayer(Layer):
                         inputs = self.inputs[i, k].copy()
                     # Output is the cross correlation in valid mode between the input and kernel
                     self.output[i, j] += signal.correlate2d(inputs, self.kernels[j, k], mode="valid")[::self.stride, ::self.stride]
-            
+
     def backward(self, delta: np.ndarray) -> None:
         """
         Backward pass using the convolutional layer. Creates gradient attributes with respect to kernels, biases and inputs.
@@ -223,16 +223,16 @@ class ConvolutionalLayer(Layer):
             # If stride is present delta needs to be dilated
             delta_dilated = dilate(delta, stride)
 
-            delta_dilated_shape = delta_dilated.shape[-1]
-            input_shape = inputs.shape[-1]
+            delta_dilated_height, delta_dilated_width = delta_dilated.shape[-2:]
+            input_height, input_width = inputs.shape[-2:]
             kernel_shape = kernel.shape[-1]
 
-            if delta_dilated_shape == input_shape - kernel_shape + 1:
+            if delta_dilated_height == input_height - kernel_shape + 1 and delta_dilated_width == input_width - kernel_shape + 1:
                 # If dilated delta shape matches the needed correlation shape gradient can be computed
                 dkernel = signal.correlate2d(inputs, delta_dilated, "valid")
             else:
                 # If dilated delta shape doesn't match the needed correlation shape padding is needed
-                new_delta_shape = (input_shape - kernel_shape + 1, input_shape - kernel_shape + 1)
+                new_delta_shape = (input_height - kernel_shape + 1, input_width - kernel_shape + 1)
                 delta_dilated_padded = pad_to_shape(delta_dilated, new_delta_shape)
                 dkernel = signal.correlate2d(inputs, delta_dilated_padded, "valid")
 
@@ -270,16 +270,16 @@ class ConvolutionalLayer(Layer):
 
             delta_dilated = dilate(delta, stride)
 
-            delta_dilated_shape = delta_dilated.shape[-1]
-            input_shape = inputs.shape[-1]
+            delta_dilated_height, delta_dilated_width = delta_dilated.shape[-2:]
+            input_height, input_width = inputs.shape[-2:]
             kernel_shape = kernel.shape[-1]
 
-            if delta_dilated_shape == input_shape - kernel_shape + 1:
+            if delta_dilated_height == input_height - kernel_shape + 1 and delta_dilated_width == input_width - kernel_shape + 1:
                 # If dilated delta shape matches the needed coonvolution shape gradient can be computed
                 dinput = signal.convolve2d(delta_dilated, kernel, "full")
             else:
                 # If dilated delta shape doesn't match the needed coonvolution shape padding is needed
-                new_delta_shape = (input_shape - kernel_shape + 1, input_shape - kernel_shape + 1)
+                new_delta_shape = (input_height - kernel_shape + 1, input_width - kernel_shape + 1)
                 delta_dilated_padded = pad_to_shape(delta_dilated, new_delta_shape)
                 dinput = signal.convolve2d(delta_dilated_padded, kernel, "full")
 
@@ -311,7 +311,7 @@ class MaxPoolLayer(Layer):
         """
 
         # Unpack the input_shape tuple
-        input_channels, input_width, input_height = input_shape
+        input_channels, input_height, input_width = input_shape
 
         # Store input channels, kernel size and stride
         self.input_channels = input_channels
@@ -320,11 +320,11 @@ class MaxPoolLayer(Layer):
         self.padding = padding
 
         # Calculate output width and height
-        self.output_width = int((input_width - kernel_size + 2 * padding) / stride) + 1
         self.output_height = int((input_height - kernel_size + 2 * padding) / stride) + 1
+        self.output_width = int((input_width - kernel_size + 2 * padding) / stride) + 1
 
         # Create output shape
-        self.output_shape = (self.input_channels, self.output_width, self.output_height)
+        self.output_shape = (self.input_channels, self.output_height, self.output_width)
 
     def forward(self, inputs: np.ndarray) -> None:
         """
@@ -364,22 +364,23 @@ class MaxPoolLayer(Layer):
                 # Add empty list to max indices for the current channel of the current sample
                 self.max_indices[i].append([])
 
-                # Loop through each element of the output
-                for k in range(self.output_width):
-                    for l in range(self.output_height):
-                        
-                        # Initalize axis 0 start and end indices 
-                        axis_0_start = k * self.stride
-                        axis_0_end = axis_0_start + self.kernel_size
+                if self.padding:
+                    arr = np.pad(self.inputs[i, j], pad_width=self.padding, mode='constant')
+                else:
+                    arr = self.inputs[i, j].copy()
 
+                # Loop through each element of the output
+                for k in range(self.output_height):
+
+                    # Initalize axis 0 start and end indices 
+                    axis_0_start = k * self.stride
+                    axis_0_end = axis_0_start + self.kernel_size
+
+                    for l in range(self.output_width):
+                        
                         # Initalize axis 1 start and end indices
                         axis_1_start = l*self.stride
                         axis_1_end = axis_1_start + self.kernel_size
-
-                        if self.padding:
-                            arr = np.pad(self.inputs[i, j], pad_width=self.padding, mode='constant')
-                        else:
-                            arr = self.inputs[i, j].copy()
                             
                         # Use axis 0 and 1 indices to obtain max pooling region   
                         region = arr[axis_0_start:axis_0_end, axis_1_start:axis_1_end]
@@ -417,17 +418,18 @@ class MaxPoolLayer(Layer):
         # Number of samples, first dimenison
         n_samples = self.inputs.shape[0]
 
+        if self.padding:
+            dinput_height, dinput_width = input_shape[-2:]
+            dinput_shape = (dinput_height + 2 * self.padding, dinput_width + 2 * self.padding)
+        else:
+            dinput_shape = input_shape[-2:]
+
         # Loop through samples
         for i in range(n_samples):
             # Loop through channels
             for j in range(self.input_channels):
-
+                
                 # Initialize gradient for current sample
-                if self.padding:
-                    dinput_shape = (input_shape[2] + 2 * self.padding, input_shape[3] + 2 * self.padding)
-                else:
-                    dinput_shape = input_shape[-2:]
-                    
                 dinput = np.zeros(dinput_shape)
 
                 # Loop through pairs of indices zipped with a delta value

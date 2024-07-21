@@ -1,4 +1,5 @@
 import numpy as np
+import time
 
 def dilate(arr: np.ndarray, stride: int) -> np.ndarray:
     """
@@ -59,3 +60,18 @@ def pad_to_shape(arr: np.ndarray, target_shape: tuple) -> np.ndarray:
     # Apply padding
     padded = np.pad(arr, ((pad_top, pad_bottom), (pad_left, pad_right)), mode='constant', constant_values=0)
     return padded
+
+def timeit(name):
+
+    def timed(func):
+
+        def decorator(*args, **kwargs):
+
+            ts = time.time()
+            func(*args, **kwargs)
+            te = time.time()
+            print('Function', func.__module__, name, func.__name__, 'time:', round((te - ts) * 1000, 1), 'ms')
+
+        return decorator
+    
+    return timed
