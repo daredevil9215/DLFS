@@ -188,8 +188,8 @@ class ConvolutionalLayer(Layer):
                         dinputs = dinputs[self.padding:-self.padding, self.padding:-self.padding]
 
                     else:
-                            dkernels = self._calculate_kernel_gradient(self.inputs[i, k], delta[i, j], self.kernels[j, k], stride=self.stride)
-                            dinputs = self._calculate_input_gradient(self.inputs[i, k], delta[i, j], self.kernels[j, k], stride=self.stride)
+                        dkernels = self._calculate_kernel_gradient(self.inputs[i, k], delta[i, j], self.kernels[j, k], stride=self.stride)
+                        dinputs = self._calculate_input_gradient(self.inputs[i, k], delta[i, j], self.kernels[j, k], stride=self.stride)
 
                     self.dkernels[j, k] += dkernels
                     self.dinputs[i, k] += dinputs
@@ -278,7 +278,7 @@ class ConvolutionalLayer(Layer):
                 # If dilated delta shape matches the needed coonvolution shape gradient can be computed
                 dinput = signal.convolve2d(delta_dilated, kernel, "full")
             else:
-                # If dilated delta shape doesn't match the needed coonvolution shape padding is needed
+                # If dilated delta shape doesn't match the needed convolution shape padding is needed
                 new_delta_shape = (input_height - kernel_shape + 1, input_width - kernel_shape + 1)
                 delta_dilated_padded = pad_to_shape(delta_dilated, new_delta_shape)
                 dinput = signal.convolve2d(delta_dilated_padded, kernel, "full")
