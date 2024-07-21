@@ -1,8 +1,7 @@
 import numpy as np
 from scipy import signal
 from .base import Layer
-from .helpers import dilate, pad_to_shape, timeit
-from time import time
+from .helpers import dilate, pad_to_shape
 
 class DenseLayer(Layer):
     
