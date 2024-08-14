@@ -1,6 +1,7 @@
 from typing import Union
 import numpy as np
 from .base import Layer, Activation, Loss, Optimizer
+from .layers import RecurrentLayerHidden, RNN
 
 class Model:
 
@@ -45,7 +46,10 @@ class Model:
 
         # Forward data through all the layers
         for idx, layer in enumerate(self.layers[1:], start=1):
-            layer.forward(self.layers[idx - 1].output)
+            if isinstance(layer, RecurrentLayerHidden) and isinstance(self.layers[idx - 1], RecurrentLayerHidden):
+                layer.forward(self.layers[idx - 1].hidden_states)
+            else:
+                layer.forward(self.layers[idx - 1].output)
 
         # Output of the model is the output of the last layer
         self.output = self.layers[-1].output
@@ -84,12 +88,16 @@ class Model:
         # Loop through all layers
         for layer in self.layers:
             # If the layer has weights or kernels attribute we can update it
-            if hasattr(layer, 'weights') or hasattr(layer, 'kernels'):
+            if isinstance(layer, Layer):
                 self.optimizer.update_layer_parameters(layer)
+            if isinstance(layer, RNN):
+                for recurrent_layer in layer.recurrent_layers:
+                    self.optimizer.update_layer_parameters(recurrent_layer)
+
 
         self.optimizer.update_parameters()
 
-    def train(self, X: np.ndarray, y: np.ndarray, epochs: int = 1000, print_every: int = None) -> None:
+    def train(self, X: np.ndarray, y: np.ndarray, epochs: int = 1000, batch_size: int = None, print_every: int = None) -> None:
         """
         Train the model.
 
@@ -104,6 +112,9 @@ class Model:
         epochs : int, default=1000
             Number of training epochs.
 
+        batch_size : int, default=None
+            Number of samples in a data subset. Batch size of None results in using all samples.
+
         print_every : int, default=None
             If given an integer, prints loss value.
 
@@ -114,18 +125,41 @@ class Model:
 
         for i in range(epochs + 1):
 
-            # Forward pass
-            self._forward(X)
+            if batch_size is None:
 
-            if print_every is not None:
-                if not i % print_every:
-                    print(f'===== EPOCH : {i} ===== LOSS : {self.loss_function.calculate(self.output, y)} =====')
+                # Forward pass
+                self._forward(X)
 
-            # Backward pass
-            self._backward(y)
+                if print_every is not None:
+                    if not i % print_every:
+                        print(f'===== EPOCH : {i} ===== LOSS : {self.loss_function.calculate(self.output, y)} =====')
 
-            # Update parameters
-            self._update_model_parameters()
+                # Backward pass
+                self._backward(y)
+
+                # Update parameters
+                self._update_model_parameters()
+
+            else:
+
+                for j in range(0, len(X), batch_size):
+
+                    batch_X = X[j:j+batch_size, :]
+                    batch_y = y[j:j+batch_size]
+
+                    # Forward pass
+                    self._forward(batch_X)
+
+                    # Backward pass
+                    self._backward(batch_y)
+
+                    # Update parameters
+                    self._update_model_parameters()
+
+                if print_every is not None:
+                    if not i % print_every:
+                        print(f'===== EPOCH : {i} ===== LOSS : {self.loss_function.calculate(self.output, batch_y)} =====')
+
 
     def predict(self, X: np.ndarray) -> np.ndarray:
         """

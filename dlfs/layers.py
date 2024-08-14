@@ -75,7 +75,7 @@ class ConvolutionalLayer(Layer):
         Parameters
         ----------
         input_shape : tuple
-            Dimension of a single sample processed by the layer. For images it's (channels, width, height).
+            Dimension of a single sample processed by the layer. For images it's (channels, height, width).
 
         output_channels : int
             Number of channels of the output array.
@@ -297,7 +297,7 @@ class MaxPoolLayer(Layer):
         Parameters
         ----------
         input_shape : tuple
-            Dimension of a single sample processed by the layer. For images it's (channels, width, height).
+            Dimension of a single sample processed by the layer. For images it's (channels, height, width).
 
         kernel_size : int
             Dimension of a kernel, square array of shape (kernel_size, kernel_size).
@@ -449,7 +449,7 @@ class ReshapeLayer(Layer):
         Parameters
         ----------
         input_shape : tuple[int, int, int]
-            Input shape of a single sample. For images it's (channels, width, height).
+            Input shape of a single sample. For images it's (channels, height, width).
 
         output_shape : int
             Output shape of a single sample.
@@ -459,7 +459,7 @@ class ReshapeLayer(Layer):
 
     def forward(self, inputs: np.ndarray) -> None:
         """
-        Reshapes input array from (batch_size, channels, width, height) to (batch_size, channels * width * height). Creates output attribute.
+        Reshapes input array from (batch_size, channels, height, width) to (batch_size, channels * height * width). Creates output attribute.
 
         Parameters
         ----------
@@ -476,7 +476,7 @@ class ReshapeLayer(Layer):
 
     def backward(self, delta: np.ndarray) -> None:
         """
-        Reshapes input array from (batch_size, channels * width * height) to (batch_size, channels, width, height). Creates gradient attribute.
+        Reshapes input array from (batch_size, channels * height * width) to (batch_size, channels, height, width). Creates gradient attribute.
 
         Parameters
         ----------
@@ -490,3 +490,337 @@ class ReshapeLayer(Layer):
         # Store number of samples, first dimension
         batch_size = delta.shape[0]
         self.dinputs = np.reshape(delta, (batch_size, *self.input_shape))
+
+class RecurrentLayer(Layer):
+
+    def __init__(self, n_inputs: int, n_hidden: int, n_outputs: int) -> None:
+        """
+        Recurrent layer.
+
+        Parameters
+        ----------
+        n_inputs : int
+            Number of inputs that connect to the layer.
+
+        n_hidden : int
+            Number of hidden neurons.
+
+        n_outputs : int
+            Number of output neurons.
+
+        Attributes
+        ----------
+        input_weights : numpy.ndarray
+            Matrix of input weight coefficients.
+
+        hidden_weights : numpy.ndarray
+            Matrix of hidden weight coefficients.
+
+        output_weights : numpy.ndarray
+            Matrix of output weight coefficients.
+
+        input_bias : numpy.ndaray
+            Vector of input bias coefficients.
+
+        output_bias : numpy.ndaray
+            Vector of output bias coefficients.
+        """
+        k = 1/np.sqrt(n_hidden)
+        self.n_hidden = n_hidden
+        self.input_weights = np.random.rand(n_inputs, n_hidden) * 2 * k - k # np.random.uniform(-k, k, (n_inputs, n_hidden))
+        self.hidden_weights = np.random.rand(n_hidden, n_hidden) * 2 * k - k # np.random.uniform(-k, k, (n_hidden, n_hidden))
+        self.output_weights = np.random.rand(n_hidden, n_outputs) * 2 * k - k  # np.random.uniform(-k, k, (n_hidden, n_outputs))
+        self.input_bias = np.random.rand(n_hidden) * 2 * k - k # np.random.uniform(-k, k, (n_hidden))
+        self.output_bias = np.random.rand(n_outputs) * 2 * k - k # np.random.uniform(-k, k, (n_outputs))
+        
+    def forward(self, inputs: np.ndarray) -> None:
+        """
+        Forward pass using the recurrent layer. Creates hidden states and output attributes.
+
+        Parameters
+        ----------
+        inputs : numpy.ndarray
+            Input matrix.
+
+        Returns
+        -------
+        None
+        """
+        # Store inputs for later use
+        self.inputs = inputs
+
+        # Store number of samples
+        self.n_samples = inputs.shape[0]
+
+        self.sequence_length = inputs.shape[1]
+
+        # Initialize output
+        self.output = np.zeros((self.n_samples, self.sequence_length, self.output_weights.shape[1]))
+
+        # Initialize hidden states
+        self.hidden_states = np.zeros((self.n_samples, self.sequence_length, self.n_hidden))
+
+        for i, sequence in enumerate(inputs):
+
+            for j, x in enumerate(sequence):
+
+                # Reshape to match dimensions
+                x = x.reshape(1, -1)
+
+                input_x = np.dot(x, self.input_weights)
+
+                hidden_x = input_x + np.dot(self.hidden_states[i, max(j-1, 0)], self.hidden_weights) + self.input_bias
+
+                # Activation function
+                hidden_x = np.tanh(hidden_x)
+
+                # Store current hidden state
+                self.hidden_states[i, j] = hidden_x.copy()
+
+                output_x = np.dot(hidden_x, self.output_weights) + self.output_bias
+
+                # Store current output
+                self.output[i, j] = output_x.copy()
+
+    def backward(self, delta: np.ndarray) -> None:
+        """
+        Backward pass using the recurrent layer. 
+        Creates gradient attributes with respect to input weights, hidden weights, output weights, input bias, output bias and inputs.
+
+        Parameters
+        ----------
+        delta : np.ndarray
+            Accumulated gradient obtained by backpropagation.
+
+        Returns
+        -------
+        None
+        """
+        # Initialize gradient attributes
+        self.dinput_weights = np.zeros_like(self.input_weights)
+        self.dhidden_weights = np.zeros_like(self.hidden_weights)
+        self.dinput_bias = np.zeros_like(self.input_bias)
+        self.doutput_weights = np.zeros_like(self.output_weights)
+        self.doutput_bias = np.zeros_like(self.output_bias)
+        self.dinputs = np.zeros_like(self.inputs, dtype=np.float64)
+
+        for i in range(self.n_samples - 1, -1, -1):
+
+            # Initialize next hidden gradient
+            next_hidden_gradient = None
+
+            for j in range(self.sequence_length - 1, -1, -1):
+
+                loss_gradient = delta[i, j].reshape(1, -1)
+                hidden_state = self.hidden_states[i, j].reshape(-1, 1)
+
+                self.doutput_weights += np.dot(hidden_state, loss_gradient)
+                self.doutput_bias += loss_gradient.reshape(-1)
+
+                hidden_gradient = np.dot(loss_gradient, self.output_weights.T)
+                if next_hidden_gradient is not None:
+                    hidden_gradient += np.dot(next_hidden_gradient, self.hidden_weights.T)
+
+                dtanh = 1 - self.hidden_states[i, j]**2
+                hidden_gradient *= dtanh
+
+                next_hidden_gradient = hidden_gradient.copy()
+
+                if j > 0:
+                    self.dhidden_weights += np.dot(self.hidden_states[i, j-1].reshape(-1, 1), hidden_gradient)
+
+                self.dinput_weights += np.dot(self.inputs[i, j].reshape(-1, 1), hidden_gradient)
+                self.dinput_bias += hidden_gradient.reshape(-1)
+                
+                self.dinputs[i, j] += np.dot(self.input_weights, hidden_gradient.T).reshape(-1)
+
+class RecurrentLayerHidden(Layer):
+
+    def __init__(self, n_inputs: int, n_hidden: int) -> None:
+        """
+        Recurrent layer.
+
+        Parameters
+        ----------
+        n_inputs : int
+            Number of input features.
+
+        n_hidden : int
+            Number of hidden features.
+
+        n_outputs : int
+            Number of output features.
+
+        Attributes
+        ----------
+        input_weights : numpy.ndarray
+            Matrix of input weight coefficients.
+
+        hidden_weights : numpy.ndarray
+            Matrix of hidden weight coefficients.
+
+        output_weights : numpy.ndarray
+            Matrix of output weight coefficients.
+
+        input_bias : numpy.ndaray
+            Vector of input bias coefficients.
+
+        output_bias : numpy.ndaray
+            Vector of output bias coefficients.
+        """
+        k = 1 / np.sqrt(n_hidden)
+        self.n_hidden = n_hidden
+        self.input_weights = np.random.uniform(-k, k, (n_inputs, n_hidden))
+        self.hidden_weights = np.random.uniform(-k, k, (n_hidden, n_hidden))
+        self.input_bias = np.random.uniform(-k, k, (n_hidden))
+        
+    def forward(self, inputs: np.ndarray) -> None:
+        """
+        Forward pass using the recurrent layer. Creates hidden states and output attributes.
+
+        Parameters
+        ----------
+        inputs : numpy.ndarray
+            Input matrix.
+
+        Returns
+        -------
+        None
+        """
+        # Store inputs for later use
+        self.inputs = inputs
+
+        # Store number of samples
+        self.n_samples = inputs.shape[0]
+
+        self.sequence_length = inputs.shape[1]
+
+        # Initialize output
+        self.output = np.zeros((self.n_samples, self.n_hidden))
+
+        # Initialize hidden states
+        self.hidden_states = np.zeros((self.n_samples, self.sequence_length, self.n_hidden))
+
+        for i, sequence in enumerate(inputs):
+
+            for j, x in enumerate(sequence):
+
+                # Reshape to match dimensions
+                x = x.reshape(1, -1)
+
+                input_x = np.dot(x, self.input_weights)
+
+                hidden_x = input_x + np.dot(self.hidden_states[i, max(j-1, 0)], self.hidden_weights) + self.input_bias
+
+                # Activation function
+                hidden_x = np.tanh(hidden_x)
+
+                # Store current hidden state
+                self.hidden_states[i, j] = hidden_x.copy()
+
+            # Store current output
+            self.output[i] = self.hidden_states[i, -1].copy()
+
+    def backward(self, delta: np.ndarray) -> None:
+        """
+        Backward pass using the recurrent layer. 
+        Creates gradient attributes with respect to input weights, hidden weights, output weights, input bias, output bias and inputs.
+
+        Parameters
+        ----------
+        delta : np.ndarray
+            Accumulated gradient obtained by backpropagation.
+
+        Returns
+        -------
+        None
+        """
+        # Initialize gradient attributes
+        self.dinput_weights = np.zeros_like(self.input_weights)
+        self.dhidden_weights = np.zeros_like(self.hidden_weights)
+        self.dinput_bias = np.zeros_like(self.input_bias)
+        self.dinputs = np.zeros_like(self.inputs, dtype=np.float64)
+
+        for i in range(self.n_samples - 1, -1, -1):
+
+            # Initialize next hidden gradient
+            next_hidden_gradient = None
+
+            for j in range(self.sequence_length - 1, -1, -1):
+
+                if len(delta.shape) == 2:
+
+                    loss_gradient = delta[i].reshape(1, -1)
+
+                    hidden_gradient = loss_gradient.copy()
+                    if next_hidden_gradient is not None:
+                        hidden_gradient += np.dot(next_hidden_gradient, self.hidden_weights)
+
+                    dtanh = 1 - self.hidden_states[i, j]**2
+                    hidden_gradient *= dtanh
+
+                    next_hidden_gradient = hidden_gradient.copy()
+
+                    if j > 0:
+                        self.dhidden_weights += np.dot(self.hidden_states[i, j-1].reshape(-1, 1), hidden_gradient)
+
+                    self.dinput_weights += np.dot(self.inputs[i, j].reshape(-1, 1), hidden_gradient)
+                    self.dinput_bias += hidden_gradient.reshape(-1)
+                    
+                    self.dinputs[i, j] += np.dot(self.input_weights, hidden_gradient.T).reshape(-1)
+
+                else:
+
+                    loss_gradient = delta[i, j].reshape(1, -1)
+
+                    hidden_gradient = loss_gradient.copy()
+                    if next_hidden_gradient is not None:
+                        hidden_gradient += np.dot(next_hidden_gradient, self.hidden_weights)
+
+                    dtanh = 1 - self.hidden_states[i, j]**2
+                    hidden_gradient *= dtanh
+
+                    next_hidden_gradient = hidden_gradient.copy()
+
+                    if j > 0:
+                        self.dhidden_weights += np.dot(self.hidden_states[i, j-1].reshape(-1, 1), hidden_gradient)
+
+                    self.dinput_weights += np.dot(self.inputs[i, j].reshape(-1, 1), hidden_gradient)
+                    self.dinput_bias += hidden_gradient.reshape(-1)
+                    
+                    self.dinputs[i, j] += np.dot(self.input_weights, hidden_gradient.T).reshape(-1)
+
+class RNN:
+
+    def __init__(self, n_inputs: int, n_hidden: int, n_layers: int = 1) -> None:
+        """
+        Recurrent neural network.
+
+        Parameters
+        ----------
+        n_inputs : int
+            Number of input features.
+
+        n_hidden : int
+            Number of hidden features.
+        """
+        self.recurrent_layers = [RecurrentLayerHidden(n_inputs, n_hidden)]
+        if n_layers > 1:
+            for _ in range(n_layers - 1):
+                self.recurrent_layers.append(RecurrentLayerHidden(n_hidden, n_hidden))
+
+    def forward(self, inputs: np.ndarray) -> None:
+
+        self.recurrent_layers[0].forward(inputs)
+
+        for idx, layer in enumerate(self.recurrent_layers[1:], start=1):
+            layer.forward(self.recurrent_layers[idx - 1].hidden_states)
+
+        self.output = self.recurrent_layers[-1].output.copy()
+
+    def backward(self, delta: np.ndarray) -> None:
+
+        self.recurrent_layers[-1].backward(delta)
+
+        for idx, layer in reversed(list(enumerate(self.recurrent_layers[:-1]))):
+            layer.backward(self.recurrent_layers[idx + 1].dinputs)
