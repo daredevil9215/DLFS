@@ -1,6 +1,6 @@
 import numpy as np
 from .base import Optimizer, Layer
-from .layers import DenseLayer, ConvolutionalLayer, RecurrentLayer, RecurrentLayerHidden, RNN
+from .layers import DenseLayer, ConvolutionalLayer, RecurrentLayer, RNN
 
 class Optimizer_SGD(Optimizer):
 
@@ -89,8 +89,6 @@ class Optimizer_SGD(Optimizer):
                 if not hasattr(layer, 'input_weights_momentum'):
                     layer.input_weights_momentum = np.zeros_like(layer.input_weights)
                     layer.hidden_weights_momentum = np.zeros_like(layer.hidden_weights)
-                    layer.output_weights_momentum = np.zeros_like(layer.output_weights)
-                    layer.output_bias_momentum = np.zeros_like(layer.output_bias)
                     layer.input_bias_momentum = np.zeros_like(layer.input_bias)
 
                 layer.input_weights_momentum = self.momentum * layer.input_weights_momentum - self._current_learning_rate * layer.dinput_weights
@@ -98,12 +96,6 @@ class Optimizer_SGD(Optimizer):
 
                 layer.hidden_weights_momentum = self.momentum * layer.hidden_weights_momentum - self._current_learning_rate * layer.dhidden_weights
                 hidden_weights_updates = layer.hidden_weights_momentum
-
-                layer.output_weights_momentum = self.momentum * layer.output_weights_momentum - self._current_learning_rate * layer.doutput_weights
-                output_weights_updates = layer.output_weights_momentum
-
-                layer.output_bias_momentum = self.momentum * layer.output_bias_momentum - self._current_learning_rate * layer.doutput_bias
-                output_bias_updates = layer.output_bias_momentum
 
                 layer.input_bias_momentum = self.momentum * layer.input_bias_momentum - self._current_learning_rate * layer.dinput_bias
                 input_bias_updates = layer.input_bias_momentum
@@ -123,13 +115,6 @@ class Optimizer_SGD(Optimizer):
             elif isinstance(layer, RecurrentLayer):
                 input_weights_updates = -self._current_learning_rate * layer.dinput_weights
                 hidden_weights_updates =  -self._current_learning_rate * layer.dhidden_weights
-                output_weights_updates = -self._current_learning_rate * layer.doutput_weights
-                output_bias_updates = -self._current_learning_rate * layer.doutput_bias
-                input_bias_updates = -self._current_learning_rate * layer.dinput_bias
-
-            elif isinstance(layer, RecurrentLayerHidden):
-                input_weights_updates = -self._current_learning_rate * layer.dinput_weights
-                hidden_weights_updates =  -self._current_learning_rate * layer.dhidden_weights
                 input_bias_updates = -self._current_learning_rate * layer.dinput_bias
             
 
@@ -142,13 +127,6 @@ class Optimizer_SGD(Optimizer):
             layer.biases += bias_updates
 
         elif isinstance(layer, RecurrentLayer):
-            layer.input_weights += input_weights_updates
-            layer.hidden_weights += hidden_weights_updates
-            layer.input_bias += input_bias_updates
-            layer.output_weights += output_weights_updates
-            layer.output_bias += output_bias_updates
-
-        elif isinstance(layer, RecurrentLayerHidden):
 
             layer.input_weights += input_weights_updates
             layer.hidden_weights += hidden_weights_updates

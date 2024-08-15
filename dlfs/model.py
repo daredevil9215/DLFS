@@ -1,7 +1,7 @@
 from typing import Union
 import numpy as np
 from .base import Layer, Activation, Loss, Optimizer
-from .layers import RecurrentLayerHidden, RNN
+from .layers import RNN
 
 class Model:
 
@@ -46,9 +46,6 @@ class Model:
 
         # Forward data through all the layers
         for idx, layer in enumerate(self.layers[1:], start=1):
-            if isinstance(layer, RecurrentLayerHidden) and isinstance(self.layers[idx - 1], RecurrentLayerHidden):
-                layer.forward(self.layers[idx - 1].hidden_states)
-            else:
                 layer.forward(self.layers[idx - 1].output)
 
         # Output of the model is the output of the last layer
@@ -130,10 +127,6 @@ class Model:
                 # Forward pass
                 self._forward(X)
 
-                if print_every is not None:
-                    if not i % print_every:
-                        print(f'===== EPOCH : {i} ===== LOSS : {self.loss_function.calculate(self.output, y)} =====')
-
                 # Backward pass
                 self._backward(y)
 
@@ -144,6 +137,7 @@ class Model:
 
                 for j in range(0, len(X), batch_size):
 
+                    # Subset data into a batch
                     batch_X = X[j:j+batch_size, :]
                     batch_y = y[j:j+batch_size]
 
@@ -156,10 +150,10 @@ class Model:
                     # Update parameters
                     self._update_model_parameters()
 
-                if print_every is not None:
-                    if not i % print_every:
-                        print(f'===== EPOCH : {i} ===== LOSS : {self.loss_function.calculate(self.output, batch_y)} =====')
-
+            if print_every is not None:
+                if not i % print_every:
+                    self._forward(X)
+                    print(f'===== EPOCH : {i} ===== LOSS : {self.loss_function.calculate(self.output, y)} =====')
 
     def predict(self, X: np.ndarray) -> np.ndarray:
         """
