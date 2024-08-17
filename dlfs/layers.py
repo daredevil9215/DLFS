@@ -7,7 +7,7 @@ class DenseLayer(Layer):
     
     def __init__(self, n_inputs: int, n_neurons: int) -> None:
         """
-        Layer of neurons consisting of a weight matrix and bias vector.
+        Fully connected dense layer of neurons.
 
         Parameters
         ----------
@@ -46,19 +46,23 @@ class DenseLayer(Layer):
         """
         # Store inputs for later use (backpropagation)
         self.inputs = inputs
-        #print(f'input u dense: {inputs.shape}')
-        if len(inputs.shape) > 2:
-            self.n_inputs = inputs.shape[-1]
-            temp_dim = 1
+
+        # 2D case (n_samples, n_inputs)
+        if len(inputs.shape) == 2:
+            # Output is the dot product of the input matrix and weights plus biases
+            self.output = np.dot(inputs, self.weights) + self.biases
+
+        # 3D case (n_samples, n_timestamps, n_inputs), used with RNN sequences
+        elif len(inputs.shape) == 3:
+            # Inputs need to be reshaped to 2D
+            n_inputs = inputs.shape[-1]
+            temp_dim_0 = 1
             for dim in inputs.shape[:-1]:
-                temp_dim *= dim
-            temp_inputs = np.reshape(inputs, (temp_dim, self.n_inputs))
+                temp_dim_0 *= dim
+            temp_inputs = np.reshape(inputs, (temp_dim_0, n_inputs))
             temp_output = np.dot(temp_inputs, self.weights) + self.biases
             self.output = np.reshape(temp_output, (*inputs.shape[:-1], temp_output.shape[-1]))
 
-        else:
-            # Output is the dot product of the input matrix and weights plus biases
-            self.output = np.dot(inputs, self.weights) + self.biases
 
     def backward(self, delta: np.ndarray) -> None:
         """
@@ -73,7 +77,13 @@ class DenseLayer(Layer):
         -------
         None
         """
-        #print(f'delta u dense: {delta.shape}')
+        # 2D case (n_samples, n_inputs)
+        if len(delta.shape) == 2:
+            self.dweights = np.dot(self.inputs.T, delta)
+            self.dbiases = np.sum(delta, axis=0)
+            self.dinputs = np.dot(delta, self.weights.T)
+        
+        # 3D case (n_samples, n_timestamps, n_inputs), used with RNN sequences
         if len(delta.shape) == 3:
             self.dweights = np.zeros_like(self.weights)
             self.dbiases = np.zeros_like(self.biases)
@@ -83,10 +93,6 @@ class DenseLayer(Layer):
                 self.dweights += np.dot(self.inputs[i].T, delta[i])
                 self.dbiases += np.sum(delta[i], axis=0)
                 self.dinputs += np.dot(delta[i], self.weights.T)
-        else:
-            self.dweights = np.dot(self.inputs.T, delta)
-            self.dbiases = np.sum(delta, axis=0)
-            self.dinputs = np.dot(delta, self.weights.T)
 
 class ConvolutionalLayer(Layer):
 
@@ -517,7 +523,7 @@ class RecurrentLayer(Layer):
 
     def __init__(self, n_inputs: int, n_hidden: int, predict_sequence: bool = False) -> None:
         """
-        Recurrent layer.
+        Recurrent layer. Takes 3D arrays of shape (n_samples, n_timestamps, n_features) as input.
 
         Parameters
         ----------
@@ -528,7 +534,7 @@ class RecurrentLayer(Layer):
             Number of hidden features.
 
         predict_sequence : bool, default=False
-            Whether a sequence or a single element is predicted.
+            Whether a sequence or a single element is returned as output.
 
         Attributes
         ----------
@@ -543,6 +549,7 @@ class RecurrentLayer(Layer):
         """
         self.predict_sequence = predict_sequence
 
+        # Initialize parameters
         k = 1 / np.sqrt(n_hidden)
         self.n_hidden = n_hidden
         self.input_weights = np.random.uniform(-k, k, (n_inputs, n_hidden))
@@ -602,7 +609,7 @@ class RecurrentLayer(Layer):
     def backward(self, delta: np.ndarray) -> None:
         """
         Backward pass using the recurrent layer. 
-        Creates gradient attributes with respect to input weights, hidden weights, output weights, input bias, output bias and inputs.
+        Creates gradient attributes with respect to input weights, hidden weights, input bias, and inputs.
 
         Parameters
         ----------
@@ -646,7 +653,7 @@ class RecurrentLayer(Layer):
             Input element.
 
         sequence_idx : int
-            Index of the sequence from input tensor.
+            Index of the sequence from input array.
 
         element_idx : int
             Index of the element from sequence.
@@ -670,7 +677,7 @@ class RecurrentLayer(Layer):
 
         return hidden_state
     
-    def _backward_step(self, delta: np.ndarray, next_hidden_gradient: np.ndarray, sequence_idx: int, element_idx: int):
+    def _backward_step(self, delta: np.ndarray, next_hidden_gradient: np.ndarray, sequence_idx: int, element_idx: int) -> np.ndarray:
         """
         Helper method used in backward pass of a single element. Computes next hidden gradient.
 
@@ -683,7 +690,7 @@ class RecurrentLayer(Layer):
             Gradient used to compute current hidden gradient.
 
         sequence_idx : int
-            Index of the sequence from input tensor.
+            Index of the sequence from input array.
 
         element_idx : int
             Index of the element from sequence.
@@ -718,7 +725,7 @@ class RNN:
 
     def __init__(self, n_inputs: int, n_hidden: int, n_layers: int = 1, predict_sequence: bool = False) -> None:
         """
-        Recurrent neural network.
+        Recurrent neural network. Takes 3D arrays of shape (n_samples, n_timestamps, n_features) as input.
 
         Parameters
         ----------
@@ -727,6 +734,17 @@ class RNN:
 
         n_hidden : int
             Number of hidden features.
+
+        n_layers : int, default=1
+            Number of recurrent layers.
+
+        predict_sequence : bool, default=False
+            Whether a sequence or a single element is returned as output.
+
+        Attributes
+        ----------
+        recurrent_layers : list[RecurrentLayer]
+            List containing recurrent layers.
         """
         if n_layers == 1:
             self.recurrent_layers = [RecurrentLayer(n_inputs, n_hidden, predict_sequence)]
@@ -743,17 +761,44 @@ class RNN:
                     self.recurrent_layers.append(RecurrentLayer(n_hidden, n_hidden))
 
     def forward(self, inputs: np.ndarray) -> None:
+        """
+        Forward pass using the RNN. Creates output attribute.
 
+        Parameters
+        ----------
+        inputs : numpy.ndarray
+            Input matrix.
+
+        Returns
+        -------
+        None
+        """
+        # Pass data to the first recurrent layer
         self.recurrent_layers[0].forward(inputs)
 
+        # Forward hidden states of the previous recurrent layer to the current one
         for idx, layer in enumerate(self.recurrent_layers[1:], start=1):
             layer.forward(self.recurrent_layers[idx - 1].hidden_states)
 
+        # Output of the RNN is the final recurrent layer's output
         self.output = self.recurrent_layers[-1].output.copy()
 
     def backward(self, delta: np.ndarray) -> None:
+        """
+        Backward pass using the RNN.
 
+        Parameters
+        ----------
+        delta : np.ndarray
+            Accumulated gradient obtained by backpropagation.
+
+        Returns
+        -------
+        None
+        """
+        # Pass gradient to the final recurrent layer
         self.recurrent_layers[-1].backward(delta)
 
+        # Backpropagate gradient
         for idx, layer in reversed(list(enumerate(self.recurrent_layers[:-1]))):
             layer.backward(self.recurrent_layers[idx + 1].dinputs)

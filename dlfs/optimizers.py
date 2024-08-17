@@ -1,6 +1,6 @@
 import numpy as np
 from .base import Optimizer, Layer
-from .layers import DenseLayer, ConvolutionalLayer, RecurrentLayer, RNN
+from .layers import DenseLayer, ConvolutionalLayer, RecurrentLayer
 
 class Optimizer_SGD(Optimizer):
 
@@ -127,7 +127,6 @@ class Optimizer_SGD(Optimizer):
             layer.biases += bias_updates
 
         elif isinstance(layer, RecurrentLayer):
-
             layer.input_weights += input_weights_updates
             layer.hidden_weights += hidden_weights_updates
             layer.input_bias += input_bias_updates
