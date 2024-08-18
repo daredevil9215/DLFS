@@ -46,22 +46,7 @@ class DenseLayer(Layer):
         """
         # Store inputs for later use (backpropagation)
         self.inputs = inputs
-
-        # 2D case (n_samples, n_inputs)
-        if len(inputs.shape) == 2:
-            # Output is the dot product of the input matrix and weights plus biases
-            self.output = np.dot(inputs, self.weights) + self.biases
-
-        # 3D case (n_samples, n_timestamps, n_inputs), used with RNN sequences
-        elif len(inputs.shape) == 3:
-            # Inputs need to be reshaped to 2D
-            n_inputs = inputs.shape[-1]
-            temp_dim_0 = 1
-            for dim in inputs.shape[:-1]:
-                temp_dim_0 *= dim
-            temp_inputs = np.reshape(inputs, (temp_dim_0, n_inputs))
-            temp_output = np.dot(temp_inputs, self.weights) + self.biases
-            self.output = np.reshape(temp_output, (*inputs.shape[:-1], temp_output.shape[-1]))
+        self.output = np.dot(inputs, self.weights) + self.biases
 
 
     def backward(self, delta: np.ndarray) -> None:
@@ -573,38 +558,30 @@ class RecurrentLayer(Layer):
         self.inputs = inputs
 
         # Store number of samples
-        self.n_samples = inputs.shape[0]
-
-        # Store sequence length
-        self.sequence_length = inputs.shape[1]
+        self.n_samples, self.timestamps = inputs.shape[:2]
 
         # Initialize output
         if self.predict_sequence:
-            self.output = np.zeros((self.n_samples, self.sequence_length, self.n_hidden))
+            self.output = np.zeros((self.n_samples, self.timestamps, self.n_hidden))
         else:
             self.output = np.zeros((self.n_samples, self.n_hidden))
 
         # Initialize hidden states
-        self.hidden_states = np.zeros((self.n_samples, self.sequence_length, self.n_hidden))
+        self.hidden_states = np.zeros((self.n_samples, self.timestamps, self.n_hidden))
 
-        # Loop through sequences
-        for i, sequence in enumerate(inputs):
+        # Loop through timestamps
+        for t in range(self.timestamps):
+            # Compute current hidden states
+            hidden_states_t = np.tanh(np.dot(inputs[:, t, :], self.input_weights) + np.dot(self.hidden_states[:, max(0, t-1), :], self.hidden_weights) + self.input_bias)
+            # Store current hidden states
+            self.hidden_states[:, t, :] = hidden_states_t.copy()
 
-            # Loop through elements of sequence
-            for j, x in enumerate(sequence):
-
-                # Predict current hidden state
-                hidden_t = self._forward_step(x, i, j)
-
-                # Store hidden state for the current sequence and sequence element
-                self.hidden_states[i, j] = hidden_t.copy()
-
-            if self.predict_sequence:
-                # Hidden states of the current sequence are the predicted sequence
-                self.output[i] = self.hidden_states[i].copy()
-            else:
-                # Last hidden state of the current sequence is the predicted element
-                self.output[i] = self.hidden_states[i, -1].copy()
+        if self.predict_sequence:
+            # Hidden states of the current sequence are the predicted sequence
+            self.output = self.hidden_states.copy()
+        else:
+            # Last hidden state of the current sequence is the predicted element
+            self.output = self.hidden_states[:, -1, :].copy()
 
     def backward(self, delta: np.ndarray) -> None:
         """
@@ -626,100 +603,32 @@ class RecurrentLayer(Layer):
         self.dinput_bias = np.zeros_like(self.input_bias)
         self.dinputs = np.zeros_like(self.inputs, dtype=np.float64)
 
-        # Loop through sequences
-        for i in range(self.n_samples - 1, -1, -1):
+        # Initialize next hidden gradient
+        next_hidden_gradient = None
 
-            # Initialize next hidden gradient for the current sequence
-            next_hidden_gradient = None
+        # Loop through timestamps in reversed order
+        for t in range(self.timestamps - 1, -1, -1):
 
-            # Loop through elements of the sequence in reversed order
-            for j in range(self.sequence_length - 1, -1, -1):
+            if len(delta.shape) == 2:
+                hidden_gradient = delta.copy()
+            elif len(delta.shape) == 3:
+                hidden_gradient = delta[:, t, :].copy()
 
-                if len(delta.shape) == 2:
-                    loss_gradient = delta[i].reshape(1, -1)
-                    next_hidden_gradient = self._backward_step(loss_gradient, next_hidden_gradient, i, j)
+            if next_hidden_gradient is not None:
+                hidden_gradient += np.dot(next_hidden_gradient, self.hidden_weights)
 
-                elif len(delta.shape) == 3:
-                    loss_gradient = delta[i, j].reshape(1, -1)
-                    next_hidden_gradient = self._backward_step(loss_gradient, next_hidden_gradient, i, j)
+            dtanh = 1 - self.hidden_states[:, t, :]**2
+            hidden_gradient *= dtanh
 
-    def _forward_step(self, x: np.ndarray, sequence_idx: int, element_idx: int) -> np.ndarray:
-        """
-        Helper method used in forward pass of a single element. Computes hidden state.
+            next_hidden_gradient = hidden_gradient.copy()
 
-        Parameters
-        ----------
-        x : np.ndarray
-            Input element.
+            if t > 0:
+                self.dhidden_weights += np.dot(self.hidden_states[:, t-1, :].T, hidden_gradient)
 
-        sequence_idx : int
-            Index of the sequence from input array.
+            self.dinput_weights += np.dot(self.inputs[:, t, :].T, hidden_gradient)
+            self.dinput_bias += hidden_gradient.sum(axis=0)
 
-        element_idx : int
-            Index of the element from sequence.
-
-        Returns
-        -------
-        hidden_state : np.ndarray
-        """
-
-        i, j = sequence_idx, element_idx
-
-        # Reshape to match dimensions
-        x = x.reshape(1, -1)
-
-        input_x = np.dot(x, self.input_weights)
-
-        hidden_state = input_x + np.dot(self.hidden_states[i, max(j-1, 0)], self.hidden_weights) + self.input_bias
-
-        # Activation function
-        hidden_state = np.tanh(hidden_state)
-
-        return hidden_state
-    
-    def _backward_step(self, delta: np.ndarray, next_hidden_gradient: np.ndarray, sequence_idx: int, element_idx: int) -> np.ndarray:
-        """
-        Helper method used in backward pass of a single element. Computes next hidden gradient.
-
-        Parameters
-        ----------
-        delta : np.ndarray
-            Accumulated gradient obtained by backpropagation.
-
-        next_hidden_gradient : np.ndarray
-            Gradient used to compute current hidden gradient.
-
-        sequence_idx : int
-            Index of the sequence from input array.
-
-        element_idx : int
-            Index of the element from sequence.
-
-        Returns
-        -------
-        next_hidden_gradient : np.ndarray
-        """
-
-        i, j = sequence_idx, element_idx
-
-        hidden_gradient = delta.copy()
-        if next_hidden_gradient is not None:
-            hidden_gradient += np.dot(next_hidden_gradient, self.hidden_weights)
-
-        dtanh = 1 - self.hidden_states[i, j]**2
-        hidden_gradient *= dtanh
-
-        next_hidden_gradient = hidden_gradient.copy()
-
-        if j > 0:
-            self.dhidden_weights += np.dot(self.hidden_states[i, j-1].reshape(-1, 1), hidden_gradient)
-
-        self.dinput_weights += np.dot(self.inputs[i, j].reshape(-1, 1), hidden_gradient)
-        self.dinput_bias += hidden_gradient.reshape(-1)
-        
-        self.dinputs[i, j] += np.dot(self.input_weights, hidden_gradient.T).reshape(-1)
-
-        return next_hidden_gradient
+            self.dinputs[:, t, :] += np.dot(self.input_weights, hidden_gradient.T).T
 
 class RNN:
 
