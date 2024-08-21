@@ -34,8 +34,11 @@ class Optimizer:
     """
     Optimizer abstract base class.
     """
-    def update_parameters(self) -> None:
+    def pre_update_parameters(self) -> None:
         pass
 
     def update_layer_parameters(self, layer: Layer) -> None:
+        pass
+
+    def post_update_parameters(self) -> None:
         pass

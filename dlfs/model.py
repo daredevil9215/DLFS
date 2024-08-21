@@ -1,7 +1,7 @@
 from typing import Union
 import numpy as np
 from .base import Layer, Activation, Loss, Optimizer
-from .layers import RNN
+from .layers import RNN, LSTM
 
 class Model:
 
@@ -82,17 +82,21 @@ class Model:
         None
         """
 
+        self.optimizer.pre_update_parameters()
+
         # Loop through all layers
         for layer in self.layers:
             # If the layer has weights or kernels attribute we can update it
             if isinstance(layer, Layer):
                 self.optimizer.update_layer_parameters(layer)
-            if isinstance(layer, RNN):
+            elif isinstance(layer, RNN):
                 for recurrent_layer in layer.recurrent_layers:
                     self.optimizer.update_layer_parameters(recurrent_layer)
+            elif isinstance(layer, LSTM):
+                for lstm_layer in layer.lstm_layers:
+                    self.optimizer.update_layer_parameters(lstm_layer)
 
-
-        self.optimizer.update_parameters()
+        self.optimizer.post_update_parameters()
 
     def train(self, X: np.ndarray, y: np.ndarray, epochs: int = 1000, batch_size: int = None, print_every: int = None) -> None:
         """
@@ -153,7 +157,7 @@ class Model:
             if print_every is not None:
                 if not i % print_every:
                     self._forward(X)
-                    print(f'===== EPOCH : {i} ===== LOSS : {self.loss_function.calculate(self.output, y)} =====')
+                    print(f'===== EPOCH : {i} ===== LOSS : {self.loss_function.calculate(self.output, y):.5f} =====')
 
     def predict(self, X: np.ndarray) -> np.ndarray:
         """

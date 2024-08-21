@@ -711,3 +711,301 @@ class RNN:
         # Backpropagate gradient
         for idx, layer in reversed(list(enumerate(self.recurrent_layers[:-1]))):
             layer.backward(self.recurrent_layers[idx + 1].dinputs)
+
+class LSTMLayer(Layer):
+
+    def __init__(self, n_inputs: int, n_hidden: int, predict_sequence: bool = False) -> None:
+        """
+        Long short term memory layer. Takes 3D arrays of shape (n_samples, n_timestamps, n_features) as input.
+
+        Parameters
+        ----------
+        n_inputs : int
+            Number of input features.
+
+        n_hidden : int
+            Number of hidden features.
+
+        predict_sequence : bool, default=False
+            Whether a sequence or a single element is returned as output.
+
+        Attributes
+        ----------
+        input_weights : numpy.ndarray
+            Matrix of input weight coefficients.
+
+        input_bias : numpy.ndarray
+            Vector of input bias coefficients.
+
+        forget_weights : numpy.ndarray
+            Matrix of forget weight coefficients.
+
+        forget_bias : numpy.ndarray
+            Vector of forget bias coefficients.
+
+        candidate_weights : numpy.ndarray
+            Matrix of candidate weight coefficients.
+
+        candidate_bias : numpy.ndarray
+            Vector of candidate bias coefficients.
+
+        output_weights : numpy.ndarray
+            Matrix of output weight coefficients.
+
+        output_bias : numpy.ndarray
+            Vector of output bias coefficients.
+        """
+        self.predict_sequence = predict_sequence
+
+        # Initialize parameters
+        k = 1 / np.sqrt(n_hidden)
+        self.n_hidden = n_hidden
+        self.n_inputs = n_inputs
+
+        self.input_weights = np.random.uniform(-k, k, (n_inputs + n_hidden, n_hidden))
+        self.input_bias = np.random.uniform(-k, k, (n_hidden))
+
+        self.forget_weights = np.random.uniform(-k, k, (n_inputs + n_hidden, n_hidden))
+        self.forget_bias = np.random.uniform(-k, k, (n_hidden))
+
+        self.candidate_weights = np.random.uniform(-k, k, (n_inputs + n_hidden, n_hidden))
+        self.candidate_bias = np.random.uniform(-k, k, (n_hidden)) 
+
+        self.output_weights = np.random.uniform(-k, k, (n_inputs + n_hidden, n_hidden))
+        self.output_bias = np.random.uniform(-k, k, (n_hidden)) 
+             
+    def forward(self, inputs: np.ndarray) -> None:
+        """
+        Forward pass using the LSTM layer. 
+        Creates hidden, candidate, cell, forget, input, output states and output attributes.
+
+        Parameters
+        ----------
+        inputs : numpy.ndarray
+            Input matrix.
+
+        Returns
+        -------
+        None
+        """
+
+        # Store number of samples and timestamps
+        self.n_samples, self.timestamps = inputs.shape[:2]
+
+        # Initialize concatenated inputs matrix
+        self.concat_inputs = np.zeros((self.n_samples, self.timestamps, self.n_hidden + self.n_inputs))
+
+        # Store input shape
+        self.input_shape = inputs.shape
+
+        # Initialize states
+        self.hidden_states = np.zeros((self.n_samples, self.timestamps, self.n_hidden))
+        self.candidate_states = np.zeros((self.n_samples, self.timestamps, self.n_hidden))
+        self.cell_states = np.zeros((self.n_samples, self.timestamps, self.n_hidden))
+        self.forget_states = np.zeros((self.n_samples, self.timestamps, self.n_hidden))
+        self.input_states = np.zeros((self.n_samples, self.timestamps, self.n_hidden))
+        self.output_states = np.zeros((self.n_samples, self.timestamps, self.n_hidden))
+
+        # Loop through timestamps
+        for t in range(self.timestamps):
+
+            # Concatenate inputs and previous hidden states
+            inputs_hidden_concatenated = np.concatenate((inputs[:, t, :], self.hidden_states[:, max(0, t-1), :]), axis=1)
+            self.concat_inputs[:, t, :] = inputs_hidden_concatenated
+
+            # Calculate current forget state
+            f_t = np.dot(inputs_hidden_concatenated, self.forget_weights) + self.forget_bias
+            f_t = self._sigmoid(f_t)
+            self.forget_states[:, t, :] = f_t
+
+            # Calculate current input state
+            i_t = np.dot(inputs_hidden_concatenated, self.input_weights) + self.input_bias
+            i_t = self._sigmoid(i_t)
+            self.input_states[:, t, :] = i_t
+
+            # Calculate current candidate state
+            cc_t = np.dot(inputs_hidden_concatenated, self.candidate_weights) + self.candidate_bias
+            cc_t = np.tanh(cc_t)
+            self.candidate_states[:, t, :] = cc_t
+
+            # Calculate current output state
+            o_t = np.dot(inputs_hidden_concatenated, self.output_weights) + self.output_bias
+            o_t = self._sigmoid(o_t)
+            self.output_states[:, t, :] = o_t
+
+            # Calculate current cell state
+            c_t = self.cell_states[:, max(0, t-1), :] * f_t + i_t * cc_t
+            self.cell_states[:, t, :] = c_t
+
+            # Calculate current hidden state
+            self.hidden_states[:, t, :] = o_t * np.tanh(c_t)
+       
+        if self.predict_sequence:
+            # Hidden states of the current sequence are the predicted sequence
+            self.output = self.hidden_states
+        else:
+            # Last hidden state of the current sequence is the predicted element
+            self.output = self.hidden_states[:, -1, :]
+
+    def backward(self, delta: np.ndarray) -> None:
+        """
+        Backward pass using the LSTM layer. 
+        Creates gradient attributes with respect to input, forget, candidate, output weights and biases, and inputs.
+
+        Parameters
+        ----------
+        delta : np.ndarray
+            Accumulated gradient obtained by backpropagation.
+
+        Returns
+        -------
+        None
+        """
+        # Initialize gradient attributes
+        self.dforget_weights = np.zeros_like(self.forget_weights)
+        self.dforget_bias = np.zeros_like(self.forget_bias)
+
+        self.dinput_weights = np.zeros_like(self.input_weights)
+        self.dinput_bias = np.zeros_like(self.input_bias)
+
+        self.dcandidate_weights = np.zeros_like(self.candidate_weights)
+        self.dcandidate_bias = np.zeros_like(self.candidate_bias)
+
+        self.doutput_weights = np.zeros_like(self.output_weights)
+        self.doutput_bias = np.zeros_like(self.output_bias)
+
+        self.dinputs = np.zeros(self.input_shape, dtype=np.float64)
+
+        # Initialize next cell state gradient
+        next_cell_state_grad = None
+
+        # Loop through timestamps in reversed order
+        for t in range(self.timestamps - 1, -1, -1):
+
+            # Get current states
+            c_t = self.cell_states[:, t, :]
+            cc_t = self.candidate_states[:, t, :]
+            o_t = self.output_states[:, t, :]
+            f_t = self.forget_states[:, t, :]
+            i_t = self.input_states[:, t, :]
+            x_t = self.concat_inputs[:, t, :]
+
+            if len(delta.shape) == 2:
+                delta_t = delta
+            elif len(delta.shape) == 3:
+                delta_t = delta[:, t, :]
+
+            output_grad = delta_t * np.tanh(c_t) * (1 - o_t) * o_t
+            self.doutput_weights += np.dot(x_t.T, output_grad)
+            self.doutput_bias += output_grad.sum(axis=0)
+
+            cell_state_grad = delta_t * o_t * (1 - np.tanh(c_t)**2)
+            if next_cell_state_grad is not None:
+                cell_state_grad += next_cell_state_grad * self.forget_states[:, t+1, :]
+
+            next_cell_state_grad = cell_state_grad
+
+            candidate_grad = cell_state_grad *  i_t * (1 - cc_t**2)
+
+            self.dcandidate_weights += np.dot(x_t.T, candidate_grad)
+            self.dcandidate_bias += candidate_grad.sum(axis=0)
+
+            input_grad = cell_state_grad * cc_t * (1 - i_t) * i_t
+            self.dinput_weights += np.dot(x_t.T, input_grad)
+            self.dinput_bias += input_grad.sum(axis=0)
+
+            if t > 0:
+                forget_grad = cell_state_grad * self.candidate_states[:, t-1, :] * ((1 - f_t) * f_t)
+                self.forget_weights += np.dot(x_t.T, forget_grad)
+                self.forget_bias += forget_grad.sum(axis=0)
+
+            self.dinputs[:, t, :] = np.dot(output_grad, self.output_weights[:self.n_inputs, :].T)  + \
+                                    np.dot(input_grad, self.input_weights[:self.n_inputs, :].T) + \
+                                    np.dot(forget_grad, self.forget_weights[:self.n_inputs, :].T) + \
+                                    np.dot(candidate_grad, self.candidate_weights[:self.n_inputs, :].T)
+   
+    def _sigmoid(self, x):
+        x = np.clip(x, -50, 50)
+        return 1 / (1 + np.exp(-x))
+    
+class LSTM:
+
+    def __init__(self, n_inputs: int, n_hidden: int, n_layers: int = 1, predict_sequence: bool = False) -> None:
+        """
+        LSTM neural network. Takes 3D arrays of shape (n_samples, n_timestamps, n_features) as input.
+
+        Parameters
+        ----------
+        n_inputs : int
+            Number of input features.
+
+        n_hidden : int
+            Number of hidden features.
+
+        n_layers : int, default=1
+            Number of LSTM layers.
+
+        predict_sequence : bool, default=False
+            Whether a sequence or a single element is returned as output.
+
+        Attributes
+        ----------
+        lstm_layers : list[LSTMLayer]
+            List containing LSTM layers.
+        """
+        if n_layers == 1:
+            self.lstm_layers = [LSTMLayer(n_inputs, n_hidden, predict_sequence)]
+        else:
+            self.lstm_layers = [LSTMLayer(n_inputs, n_hidden)]
+            if predict_sequence:
+                for i in range(n_layers - 1):
+                    if i == n_layers - 2:
+                        self.lstm_layers.append(LSTMLayer(n_hidden, n_hidden, predict_sequence=True))
+                    else:
+                        self.lstm_layers.append(LSTMLayer(n_hidden, n_hidden))
+            else:
+                for i in range(n_layers - 1):
+                    self.lstm_layers.append(LSTMLayer(n_hidden, n_hidden))
+
+    def forward(self, inputs: np.ndarray) -> None:
+        """
+        Forward pass using the LSTM. Creates output attribute.
+
+        Parameters
+        ----------
+        inputs : numpy.ndarray
+            Input matrix.
+
+        Returns
+        -------
+        None
+        """
+        # Pass data to the first LSTM layer
+        self.lstm_layers[0].forward(inputs)
+
+        # Forward hidden states of the previous LSTM layer to the current one
+        for idx, layer in enumerate(self.lstm_layers[1:], start=1):
+            layer.forward(self.lstm_layers[idx - 1].hidden_states)
+
+        # Output of the LSTM is the final LSTM layer's output
+        self.output = self.lstm_layers[-1].output.copy()
+
+    def backward(self, delta: np.ndarray) -> None:
+        """
+        Backward pass using the LSTM.
+
+        Parameters
+        ----------
+        delta : np.ndarray
+            Accumulated gradient obtained by backpropagation.
+
+        Returns
+        -------
+        None
+        """
+        # Pass gradient to the final LSTM layer
+        self.lstm_layers[-1].backward(delta)
+
+        # Backpropagate gradient
+        for idx, layer in reversed(list(enumerate(self.lstm_layers[:-1]))):
+            layer.backward(self.lstm_layers[idx + 1].dinputs)
