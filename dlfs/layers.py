@@ -924,7 +924,19 @@ class LSTMLayer(Layer):
                                     np.dot(forget_grad, self.forget_weights[:self.n_inputs, :].T) + \
                                     np.dot(candidate_grad, self.candidate_weights[:self.n_inputs, :].T)
    
-    def _sigmoid(self, x):
+    def _sigmoid(self, x: np.ndarray) -> np.ndarray:
+        """
+        Sigmoid activation function.
+
+        Parameters
+        ----------
+        x : np.ndarray
+            Input array.
+
+        Returns
+        -------
+        sigmoid_output : np.ndarray
+        """
         x = np.clip(x, -50, 50)
         return 1 / (1 + np.exp(-x))
     
