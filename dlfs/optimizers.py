@@ -25,10 +25,10 @@ class Optimizer_SGD(Optimizer):
             Number of training iterations used to calculate new learning rate with decay.
         """
         self.learning_rate = learning_rate
-        self._current_learning_rate = learning_rate
+        self.current_learning_rate = learning_rate
         self.momentum = momentum
         self.decay = decay
-        self._iterations = 0
+        self.iterations = 0
 
     def pre_update_parameters(self) -> None:
         """
@@ -40,7 +40,7 @@ class Optimizer_SGD(Optimizer):
         """
         if self.decay:
             # Inverse decay method
-            self._current_learning_rate = self.learning_rate  / (1 + self._iterations * self.decay)
+            self.current_learning_rate = self.learning_rate  / (1 + self.iterations * self.decay)
 
     def update_layer_parameters(self, layer: Layer) -> None:
         """
@@ -64,10 +64,10 @@ class Optimizer_SGD(Optimizer):
                     layer.weight_momentum = np.zeros_like(layer.weights)
                     layer.bias_momentum = np.zeros_like(layer.biases)
 
-                layer.weight_momentum = self.momentum * layer.weight_momentum - self._current_learning_rate * layer.dweights
+                layer.weight_momentum = self.momentum * layer.weight_momentum - self.current_learning_rate * layer.dweights
                 weight_updates = layer.weight_momentum
 
-                layer.bias_momentum = self.momentum * layer.bias_momentum - self._current_learning_rate * layer.dbiases
+                layer.bias_momentum = self.momentum * layer.bias_momentum - self.current_learning_rate * layer.dbiases
                 bias_updates = layer.bias_momentum
 
             elif isinstance(layer, ConvolutionalLayer):
@@ -76,10 +76,10 @@ class Optimizer_SGD(Optimizer):
                     layer.kernel_momentum = np.zeros_like(layer.kernels)
                     layer.bias_momentum = np.zeros_like(layer.biases)
 
-                layer.kernel_momentum = self.momentum * layer.kernel_momentum - self._current_learning_rate * layer.dkernels
+                layer.kernel_momentum = self.momentum * layer.kernel_momentum - self.current_learning_rate * layer.dkernels
                 kernel_updates = layer.kernel_momentum
 
-                layer.bias_momentum = self.momentum * layer.bias_momentum - self._current_learning_rate * layer.dbiases
+                layer.bias_momentum = self.momentum * layer.bias_momentum - self.current_learning_rate * layer.dbiases
                 bias_updates = layer.bias_momentum
 
             elif isinstance(layer, RecurrentLayer):
@@ -90,44 +90,76 @@ class Optimizer_SGD(Optimizer):
                     layer.hidden_weights_momentum = np.zeros_like(layer.hidden_weights)
                     layer.input_bias_momentum = np.zeros_like(layer.input_bias)
 
-                layer.input_weights_momentum = self.momentum * layer.input_weights_momentum - self._current_learning_rate * layer.dinput_weights
+                layer.input_weights_momentum = self.momentum * layer.input_weights_momentum - self.current_learning_rate * layer.dinput_weights
                 input_weights_updates = layer.input_weights_momentum
 
-                layer.hidden_weights_momentum = self.momentum * layer.hidden_weights_momentum - self._current_learning_rate * layer.dhidden_weights
+                layer.hidden_weights_momentum = self.momentum * layer.hidden_weights_momentum - self.current_learning_rate * layer.dhidden_weights
                 hidden_weights_updates = layer.hidden_weights_momentum
 
-                layer.input_bias_momentum = self.momentum * layer.input_bias_momentum - self._current_learning_rate * layer.dinput_bias
+                layer.input_bias_momentum = self.momentum * layer.input_bias_momentum - self.current_learning_rate * layer.dinput_bias
                 input_bias_updates = layer.input_bias_momentum
+
+            elif isinstance(layer, LSTMLayer):
+
+                if not hasattr(layer, 'input_weights_momentum'):
+                    layer.input_weights_momentums = np.zeros_like(layer.input_weights)
+                    layer.input_bias_momentums = np.zeros_like(layer.input_bias)
+                    layer.forget_weights_momentums = np.zeros_like(layer.forget_weights)
+                    layer.forget_bias_momentums = np.zeros_like(layer.forget_bias)
+                    layer.candidate_weights_momentums = np.zeros_like(layer.candidate_weights)
+                    layer.candidate_bias_momentums = np.zeros_like(layer.candidate_bias)
+                    layer.output_weights_momentums = np.zeros_like(layer.output_weights)
+                    layer.output_bias_momentums = np.zeros_like(layer.output_bias)
+
+                layer.input_weights_momentum = self.momentum * layer.input_weights_momentum - self.current_learning_rate * layer.dinput_weights
+                input_weights_updates = layer.input_weights_momentum
+                layer.input_bias_momentum = self.momentum * layer.input_bias_momentum - self.current_learning_rate * layer.dinput_bias
+                input_bias_updates = layer.input_bias_momentum
+
+                layer.forget_weights_momentum = self.momentum * layer.forget_weights_momentum - self.current_learning_rate * layer.dforget_weights
+                forget_weights_updates = layer.forget_weights_momentum
+                layer.forget_bias_momentum = self.momentum * layer.forget_bias_momentum - self.current_learning_rate * layer.dforget_bias
+                forget_bias_updates = layer.forget_bias_momentum
+
+                layer.candidate_weights_momentum = self.momentum * layer.candidate_weights_momentum - self.current_learning_rate * layer.dcandidate_weights
+                candidate_weights_updates = layer.candidate_weights_momentum
+                layer.candidate_bias_momentum = self.momentum * layer.candidate_bias_momentum - self.current_learning_rate * layer.dcandidate_bias
+                candidate_bias_updates = layer.candidate_bias_momentum
+
+                layer.output_weights_momentum = self.momentum * layer.output_weights_momentum - self.current_learning_rate * layer.doutput_weights
+                output_weights_updates = layer.output_weights_momentum
+                layer.output_bias_momentum = self.momentum * layer.output_bias_momentum - self.current_learning_rate * layer.doutput_bias
+                output_bias_updates = layer.output_bias_momentum
 
 
         else:
 
             # If there is no momentum update weights using vanilla gradient descent
             if isinstance(layer, DenseLayer):
-                weight_updates = -self._current_learning_rate * layer.dweights
-                bias_updates = -self._current_learning_rate * layer.dbiases
+                weight_updates = -self.current_learning_rate * layer.dweights
+                bias_updates = -self.current_learning_rate * layer.dbiases
 
             elif isinstance(layer, ConvolutionalLayer):
-                kernel_updates = -self._current_learning_rate * layer.dkernels
-                bias_updates = -self._current_learning_rate * layer.dbiases
+                kernel_updates = -self.current_learning_rate * layer.dkernels
+                bias_updates = -self.current_learning_rate * layer.dbiases
 
             elif isinstance(layer, RecurrentLayer):
-                input_weights_updates = -self._current_learning_rate * layer.dinput_weights
-                hidden_weights_updates =  -self._current_learning_rate * layer.dhidden_weights
-                input_bias_updates = -self._current_learning_rate * layer.dinput_bias
+                input_weights_updates = -self.current_learning_rate * layer.dinput_weights
+                hidden_weights_updates =  -self.current_learning_rate * layer.dhidden_weights
+                input_bias_updates = -self.current_learning_rate * layer.dinput_bias
 
             elif isinstance(layer, LSTMLayer):
-                input_weights_updates = -self._current_learning_rate * layer.dinput_weights
-                input_bias_updates = -self._current_learning_rate * layer.dinput_bias
+                input_weights_updates = -self.current_learning_rate * layer.dinput_weights
+                input_bias_updates = -self.current_learning_rate * layer.dinput_bias
 
-                forget_weights_updates = -self._current_learning_rate * layer.dforget_weights
-                forget_bias_updates = -self._current_learning_rate * layer.dforget_bias
+                forget_weights_updates = -self.current_learning_rate * layer.dforget_weights
+                forget_bias_updates = -self.current_learning_rate * layer.dforget_bias
 
-                candidate_weights_updates = -self._current_learning_rate * layer.dcandidate_weights
-                candidate_bias_updates = -self._current_learning_rate * layer.dcandidate_bias
+                candidate_weights_updates = -self.current_learning_rate * layer.dcandidate_weights
+                candidate_bias_updates = -self.current_learning_rate * layer.dcandidate_bias
 
-                output_weights_updates = -self._current_learning_rate * layer.doutput_weights
-                output_bias_updates = -self._current_learning_rate * layer.doutput_bias
+                output_weights_updates = -self.current_learning_rate * layer.doutput_weights
+                output_bias_updates = -self.current_learning_rate * layer.doutput_bias
             
 
         if isinstance(layer, DenseLayer):
@@ -157,7 +189,7 @@ class Optimizer_SGD(Optimizer):
             layer.output_bias += output_bias_updates
 
     def post_update_parameters(self) -> None:
-        self._iterations += 1
+        self.iterations += 1
 
 class Optimizer_Adam(Optimizer):
 
@@ -275,6 +307,62 @@ class Optimizer_Adam(Optimizer):
 
             layer.weights += -self.current_learning_rate * weight_momentums_corrected / (np.sqrt(weight_cache_corrected) + self.epsilon)
             layer.biases += -self.current_learning_rate * bias_momentums_corrected / (np.sqrt(bias_cache_corrected) + self.epsilon)
+
+        elif isinstance(layer, ConvolutionalLayer):
+
+            if not hasattr(layer, 'kernel_cache'):
+                layer.kernel_cache = np.zeros_like(layer.kernels)
+                layer.bias_cache = np.zeros_like(layer.biases)
+
+                layer.kernel_momentums = np.zeros_like(layer.kernels)
+                layer.bias_momentums = np.zeros_like(layer.biases)
+
+            layer.kernel_momentums = self.beta_1 * layer.kernel_momentums + (1-self.beta_1) * layer.dkernels
+            layer.bias_momentums = self.beta_1 * layer.bias_momentums + (1-self.beta_1) * layer.dbiases
+            kernel_momentums_corrected = layer.kernel_momentums / (1 - self.beta_1 ** (self.iterations + 1))
+            bias_momentums_corrected = layer.bias_momentums / (1 - self.beta_1 ** (self.iterations + 1))
+
+            layer.kernel_cache = self.beta_2 * layer.kernel_cache + (1 - self.beta_2) * layer.dkernels**2
+            layer.bias_cache = self.beta_2 * layer.bias_cache + (1 - self.beta_2) * layer.dbiases**2
+            kernel_cache_corrected = layer.kernel_cache / (1 - self.beta_2 ** (self.iterations + 1))
+            bias_cache_corrected = layer.bias_cache / (1 - self.beta_2 ** (self.iterations + 1))
+
+            layer.kernels += -self.current_learning_rate * kernel_momentums_corrected / (np.sqrt(kernel_cache_corrected) + self.epsilon)
+            layer.biases += -self.current_learning_rate * bias_momentums_corrected / (np.sqrt(bias_cache_corrected) + self.epsilon)
+
+        elif isinstance(layer, RecurrentLayer):
+            
+            if not hasattr(layer, 'input_weight_cache'):
+                layer.input_weight_cache = np.zeros_like(layer.input_weights)
+                layer.input_bias_cache = np.zeros_like(layer.input_bias)
+                layer.hidden_weight_cache = np.zeros_like(layer.hidden_weights)
+
+                layer.input_weight_momentums = np.zeros_like(layer.input_weights)
+                layer.input_bias_momentums = np.zeros_like(layer.input_bias)
+                layer.hidden_weight_momentums = np.zeros_like(layer.hidden_weights)
+
+            # Input weights and bias
+            layer.input_weights_momentums = self.beta_1 * layer.input_weights_momentums + (1-self.beta_1) * layer.dinput_weights
+            layer.input_bias_momentums = self.beta_1 * layer.input_bias_momentums + (1-self.beta_1) * layer.dinput_biases
+            input_weights_momentums_corrected = layer.input_weights_momentums / (1 - self.beta_1 ** (self.iterations + 1))
+            input_bias_momentums_corrected = layer.input_bias_momentums / (1 - self.beta_1 ** (self.iterations + 1))
+
+            layer.input_weights_cache = self.beta_2 * layer.input_weights_cache + (1 - self.beta_2) * layer.dinput_weightss**2
+            layer.input_bias_cache = self.beta_2 * layer.input_bias_cache + (1 - self.beta_2) * layer.dinput_biases**2
+            input_weights_cache_corrected = layer.input_weights_cache / (1 - self.beta_2 ** (self.iterations + 1))
+            input_bias_cache_corrected = layer.input_bias_cache / (1 - self.beta_2 ** (self.iterations + 1))
+
+            layer.input_weights += -self.current_learning_rate * input_weights_momentums_corrected / (np.sqrt(input_weights_cache_corrected) + self.epsilon)
+            layer.input_biases += -self.current_learning_rate * input_bias_momentums_corrected / (np.sqrt(input_bias_cache_corrected) + self.epsilon)
+
+            # Hidden weights
+            layer.hidden_weights_momentums = self.beta_1 * layer.hidden_weights_momentums + (1-self.beta_1) * layer.dhidden_weights
+            hidden_weights_momentums_corrected = layer.hidden_weights_momentums / (1 - self.beta_1 ** (self.iterations + 1))
+
+            layer.hidden_weights_cache = self.beta_2 * layer.hidden_weights_cache + (1 - self.beta_2) * layer.dhidden_weightss**2
+            hidden_weights_cache_corrected = layer.hidden_weights_cache / (1 - self.beta_2 ** (self.iterations + 1))
+
+            layer.hidden_weights += -self.current_learning_rate * hidden_weights_momentums_corrected / (np.sqrt(hidden_weights_cache_corrected) + self.epsilon)
 
     def post_update_parameters(self):
         self.iterations += 1
