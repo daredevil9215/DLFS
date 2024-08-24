@@ -342,27 +342,27 @@ class Optimizer_Adam(Optimizer):
                 layer.hidden_weight_momentums = np.zeros_like(layer.hidden_weights)
 
             # Input weights and bias
-            layer.input_weights_momentums = self.beta_1 * layer.input_weights_momentums + (1-self.beta_1) * layer.dinput_weights
-            layer.input_bias_momentums = self.beta_1 * layer.input_bias_momentums + (1-self.beta_1) * layer.dinput_biases
-            input_weights_momentums_corrected = layer.input_weights_momentums / (1 - self.beta_1 ** (self.iterations + 1))
+            layer.input_weight_momentums = self.beta_1 * layer.input_weight_momentums + (1-self.beta_1) * layer.dinput_weights
+            layer.input_bias_momentums = self.beta_1 * layer.input_bias_momentums + (1-self.beta_1) * layer.dinput_bias
+            input_weight_momentums_corrected = layer.input_weight_momentums / (1 - self.beta_1 ** (self.iterations + 1))
             input_bias_momentums_corrected = layer.input_bias_momentums / (1 - self.beta_1 ** (self.iterations + 1))
 
-            layer.input_weights_cache = self.beta_2 * layer.input_weights_cache + (1 - self.beta_2) * layer.dinput_weightss**2
-            layer.input_bias_cache = self.beta_2 * layer.input_bias_cache + (1 - self.beta_2) * layer.dinput_biases**2
-            input_weights_cache_corrected = layer.input_weights_cache / (1 - self.beta_2 ** (self.iterations + 1))
+            layer.input_weights_cache = self.beta_2 * layer.input_weight_cache + (1 - self.beta_2) * layer.dinput_weights**2
+            layer.input_bias_cache = self.beta_2 * layer.input_bias_cache + (1 - self.beta_2) * layer.dinput_bias**2
+            input_weight_cache_corrected = layer.input_weight_cache / (1 - self.beta_2 ** (self.iterations + 1))
             input_bias_cache_corrected = layer.input_bias_cache / (1 - self.beta_2 ** (self.iterations + 1))
 
-            layer.input_weights += -self.current_learning_rate * input_weights_momentums_corrected / (np.sqrt(input_weights_cache_corrected) + self.epsilon)
-            layer.input_biases += -self.current_learning_rate * input_bias_momentums_corrected / (np.sqrt(input_bias_cache_corrected) + self.epsilon)
+            layer.input_weights += -self.current_learning_rate * input_weight_momentums_corrected / (np.sqrt(input_weight_cache_corrected) + self.epsilon)
+            layer.input_bias += -self.current_learning_rate * input_bias_momentums_corrected / (np.sqrt(input_bias_cache_corrected) + self.epsilon)
 
             # Hidden weights
-            layer.hidden_weights_momentums = self.beta_1 * layer.hidden_weights_momentums + (1-self.beta_1) * layer.dhidden_weights
-            hidden_weights_momentums_corrected = layer.hidden_weights_momentums / (1 - self.beta_1 ** (self.iterations + 1))
+            layer.hidden_weight_momentums = self.beta_1 * layer.hidden_weight_momentums + (1-self.beta_1) * layer.dhidden_weights
+            hidden_weight_momentums_corrected = layer.hidden_weight_momentums / (1 - self.beta_1 ** (self.iterations + 1))
 
-            layer.hidden_weights_cache = self.beta_2 * layer.hidden_weights_cache + (1 - self.beta_2) * layer.dhidden_weightss**2
-            hidden_weights_cache_corrected = layer.hidden_weights_cache / (1 - self.beta_2 ** (self.iterations + 1))
+            layer.hidden_weight_cache = self.beta_2 * layer.hidden_weight_cache + (1 - self.beta_2) * layer.dhidden_weights**2
+            hidden_weight_cache_corrected = layer.hidden_weight_cache / (1 - self.beta_2 ** (self.iterations + 1))
 
-            layer.hidden_weights += -self.current_learning_rate * hidden_weights_momentums_corrected / (np.sqrt(hidden_weights_cache_corrected) + self.epsilon)
+            layer.hidden_weights += -self.current_learning_rate * hidden_weight_momentums_corrected / (np.sqrt(hidden_weight_cache_corrected) + self.epsilon)
 
     def post_update_parameters(self):
         self.iterations += 1
