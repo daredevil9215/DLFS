@@ -455,13 +455,13 @@ class MaxPoolLayer(Layer):
 
 class ReshapeLayer(Layer):
 
-    def __init__(self, input_shape: tuple[int, int, int], output_shape: int) -> None:
+    def __init__(self, input_shape: tuple, output_shape: tuple) -> None:
         """
         Layer used to reshape (flatten) an array.
 
         Parameters
         ----------
-        input_shape : tuple[int, int, int]
+        input_shape : tuple
             Input shape of a single sample. For images it's (channels, height, width).
 
         output_shape : int
@@ -472,7 +472,7 @@ class ReshapeLayer(Layer):
 
     def forward(self, inputs: np.ndarray) -> None:
         """
-        Reshapes input array from (batch_size, channels, height, width) to (batch_size, channels * height * width). Creates output attribute.
+        Reshapes input array to output shape. Creates output attribute.
 
         Parameters
         ----------
@@ -485,11 +485,11 @@ class ReshapeLayer(Layer):
         """
         # Store number of samples, first dimension
         batch_size = inputs.shape[0]
-        self.output = np.reshape(inputs, (batch_size, self.output_shape))
+        self.output = np.reshape(inputs, (batch_size, *self.output_shape))
 
     def backward(self, delta: np.ndarray) -> None:
         """
-        Reshapes input array from (batch_size, channels * height * width) to (batch_size, channels, height, width). Creates gradient attribute.
+        Reshapes input array to input shape. Creates gradient attribute.
 
         Parameters
         ----------

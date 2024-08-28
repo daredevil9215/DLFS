@@ -75,7 +75,8 @@ class Model:
 
     def _update_model_parameters(self) -> None:
         """
-        Method for updating model parameters (weights and biases).
+        Method for updating model parameters. 
+        Depending on the model architecture parameters are updated in different manners.
 
         Returns
         -------
@@ -86,15 +87,25 @@ class Model:
 
         # Loop through all layers
         for layer in self.layers:
-            # If the layer has weights or kernels attribute we can update it
+
+            # If the current layer is an instance of a layer subclass it can be updated
             if isinstance(layer, Layer):
                 self.optimizer.update_layer_parameters(layer)
+
+            # If the current layer is an instance of an RNN class, its recurrent layers can be updated
             elif isinstance(layer, RNN):
                 for recurrent_layer in layer.recurrent_layers:
                     self.optimizer.update_layer_parameters(recurrent_layer)
+
+            # If the current layer is an instance of an LSTM class, its LSTM layers can be updated
             elif isinstance(layer, LSTM):
                 for lstm_layer in layer.lstm_layers:
                     self.optimizer.update_layer_parameters(lstm_layer)
+
+            # If the current layer has layer attributes of its own, they can be updated
+            elif hasattr(layer, 'layers'):
+                for layer in layer.layers:
+                    self.optimizer.update_layer_parameters(layer)
 
         self.optimizer.post_update_parameters()
 
@@ -137,7 +148,13 @@ class Model:
                 # Update parameters
                 self._update_model_parameters()
 
+                if print_every is not None:
+                    if not i % print_every:
+                        print(f'===== EPOCH : {i} ===== LOSS : {self.loss_function.calculate(self.output, y):.5f} =====')
+
             else:
+
+                batch_loss = 0
 
                 for j in range(0, len(X), batch_size):
 
@@ -148,16 +165,17 @@ class Model:
                     # Forward pass
                     self._forward(batch_X)
 
+                    batch_loss += self.loss_function.calculate(self.output, batch_y)
+
                     # Backward pass
                     self._backward(batch_y)
 
                     # Update parameters
                     self._update_model_parameters()
 
-            if print_every is not None:
-                if not i % print_every:
-                    self._forward(X)
-                    print(f'===== EPOCH : {i} ===== LOSS : {self.loss_function.calculate(self.output, y):.5f} =====')
+                if print_every is not None:
+                    if not i % print_every:
+                        print(f'===== EPOCH : {i} ===== LOSS : {batch_loss / batch_size:.5f} =====')
 
     def predict(self, X: np.ndarray) -> np.ndarray:
         """
