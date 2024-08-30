@@ -712,6 +712,8 @@ class RNN:
         for idx, layer in reversed(list(enumerate(self.recurrent_layers[:-1]))):
             layer.backward(self.recurrent_layers[idx + 1].dinputs)
 
+        self.dinputs = self.recurrent_layers[0].dinputs
+
 class LSTMLayer(Layer):
 
     def __init__(self, n_inputs: int, n_hidden: int, predict_sequence: bool = False) -> None:
@@ -1021,3 +1023,5 @@ class LSTM:
         # Backpropagate gradient
         for idx, layer in reversed(list(enumerate(self.lstm_layers[:-1]))):
             layer.backward(self.lstm_layers[idx + 1].dinputs)
+
+        self.dinputs = self.lstm_layers[0].dinputs

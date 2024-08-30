@@ -105,7 +105,8 @@ class Model:
             # If the current layer has layer attributes of its own, they can be updated
             elif hasattr(layer, 'layers'):
                 for layer in layer.layers:
-                    self.optimizer.update_layer_parameters(layer)
+                    if isinstance(layer, Layer):
+                        self.optimizer.update_layer_parameters(layer)
 
         self.optimizer.post_update_parameters()
 
@@ -175,7 +176,7 @@ class Model:
 
                 if print_every is not None:
                     if not i % print_every:
-                        print(f'===== EPOCH : {i} ===== LOSS : {batch_loss / batch_size:.5f} =====')
+                        print(f'===== EPOCH : {i} ===== LOSS : {batch_loss:.5f} =====')
 
     def predict(self, X: np.ndarray) -> np.ndarray:
         """
