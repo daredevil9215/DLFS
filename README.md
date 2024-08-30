@@ -33,6 +33,6 @@ Architectures currently implemented:
 
 ## Side notes
 
-TensorFlow is included in the requirements.txt because of its image datasets.
+The dlfs library, classes and methods are written in [Sentdex](https://github.com/Sentdex) style according to the book [Neural Networks from Scratch](https://nnfs.io/). This book however covers only the basics, which is why I would recommend this book to anyone seeking out to understand the basics of neural networks.
 
-It is needed only to run the CNN notebook, so you can delete it from requirements.txt if you don't need it.
+Many thanks to the authors [Daniel Kukiela](https://github.com/daniel-kukiela) and [Harrison Kinsley](https://github.com/Sentdex) for laying out the foundations.
