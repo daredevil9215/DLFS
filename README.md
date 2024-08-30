@@ -16,6 +16,8 @@ Architectures currently implemented:
 
 - Long Short Term Memory (LSTM)
 
+- Autoencoder
+
 ## Setup
 
 1. **Set up a virtual environment** (optional):
