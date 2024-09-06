@@ -306,15 +306,15 @@ class Optimizer_Adam(Optimizer):
                       layer.candidate_weights, layer.candidate_bias, 
                       layer.output_weights, layer.output_bias)
 
-        layer.input_weights_cache, layer.input_bias_cache, 
-        layer.forget_weights_cache, layer.forget_bias_cache, 
-        layer.candidate_weights_cache, layer.candidate_bias_cache, 
-        layer.output_weights_cache, layer.output_bias_cache = self._init_parameters(lstm_parms)
+        (layer.input_weights_cache, layer.input_bias_cache,
+        layer.forget_weights_cache, layer.forget_bias_cache,
+        layer.candidate_weights_cache, layer.candidate_bias_cache,
+        layer.output_weights_cache, layer.output_bias_cache) = self._init_parameters(lstm_parms)
          
-        layer.input_weights_momentums, layer.input_bias_momentums, 
+        (layer.input_weights_momentums, layer.input_bias_momentums, 
         layer.forget_weights_momentums, layer.forget_bias_momentums, 
         layer.candidate_weights_momentums, layer.candidate_bias_momentums, 
-        layer.output_weights_momentums, layer.output_bias_momentums = self._init_parameters(lstm_parms)
+        layer.output_weights_momentums, layer.output_bias_momentums) = self._init_parameters(lstm_parms)
 
     def _update_lstm(self, layer: LSTMLayer) -> None:
         """
