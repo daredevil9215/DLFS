@@ -4,7 +4,7 @@ from .layers import DenseLayer, ConvolutionalLayer, RecurrentLayer, LSTMLayer
 
 class Optimizer_SGD(Optimizer):
 
-    def __init__(self, learning_rate: float = 1e-3, momentum: float = 0, decay: float = 0) -> None:
+    def __init__(self, learning_rate: float = 1e-3, momentum: float = 0., decay: float = 0.) -> None:
         """
         Stochastic gradient descent optimizing algorithm with momentum and decay.
 
@@ -13,10 +13,10 @@ class Optimizer_SGD(Optimizer):
         learning_rate : float, default=0.001
             Step size used in gradient descent.
 
-        momentum : float, default=0
+        momentum : float, default=0.
             Factor used to scale past gradients.
 
-        decay : float, default=0
+        decay : float, default=0.
             Factor used to reduce learning rate over time.
 
         Attributes
@@ -29,6 +29,201 @@ class Optimizer_SGD(Optimizer):
         self.momentum = momentum
         self.decay = decay
         self.iterations = 0
+
+    def _init_parameters(self, params: tuple) -> list:
+        """
+        Helper method for initializing momentums of a layer.
+
+        Parameters
+        ----------
+        params : tuple
+            Tuple of layer parameters.
+
+        Returns
+        -------
+        sgd_params : list
+            List of zero-valued momentum arrays.
+        """
+        return [np.zeros_like(param) for param in params]
+    
+    def _update_parameters(self, params: np.ndarray, gradients: np.ndarray, momentums: np.ndarray = None) -> tuple:
+        if momentums is not None:
+            new_momentums = self.momentum * momentums - self.current_learning_rate * gradients
+            return params + new_momentums, new_momentums
+        else:
+            update = -self.current_learning_rate * gradients
+            return params + update
+    
+    def _init_lstm(self, layer: LSTMLayer) -> None:
+        """
+        Helper method for initializing LSTMLayer momentums.
+
+        Parameters
+        ----------
+        layer : LSTMLayer
+            LSTM layer to initialize.
+
+        Returns
+        -------
+        None
+        """
+
+        lstm_parms = (layer.input_weights, layer.input_bias, 
+                      layer.forget_weights, layer.forget_bias, 
+                      layer.candidate_weights, layer.candidate_bias, 
+                      layer.output_weights, layer.output_bias)
+         
+        (layer.input_weights_momentums, layer.input_bias_momentums, 
+        layer.forget_weights_momentums, layer.forget_bias_momentums, 
+        layer.candidate_weights_momentums, layer.candidate_bias_momentums, 
+        layer.output_weights_momentums, layer.output_bias_momentums) = self._init_parameters(lstm_parms)
+
+    def _update_lstm(self, layer: LSTMLayer) -> None:
+        """
+        Helper method for updating LSTMLayer parameters, momentums.
+
+        Parameters
+        ----------
+        layer : LSTMLayer
+            LSTM layer to update.
+
+        Returns
+        -------
+        None
+        """
+        if self.momentum:
+
+            # Input weights
+            layer.input_weights, layer.input_weights_momentums = self._update_parameters(layer.input_weights, layer.dinput_weights, layer.input_weights_momentums)
+            layer.input_bias, layer.input_bias_momentums = self._update_parameters(layer.input_bias, layer.dinput_bias, layer.input_bias_momentums)
+
+            # Forget weights
+            layer.forget_weights, layer.forget_weights_momentums = self._update_parameters(layer.forget_weights, layer.dforget_weights, layer.forget_weights_momentums)
+            layer.forget_bias, layer.forget_bias_momentums = self._update_parameters(layer.forget_bias, layer.dforget_bias, layer.forget_bias_momentums)
+
+            # Candidate weights
+            layer.candidate_weights, layer.candidate_weights_momentums = self._update_parameters(layer.candidate_weights, layer.dcandidate_weights, layer.candidate_weights_momentums)
+            layer.candidate_bias, layer.candidate_bias_momentums = self._update_parameters(layer.candidate_bias, layer.dcandidate_bias, layer.candidate_bias_momentums)
+
+            # Output weights
+            layer.output_weights, layer.output_weights_momentums = self._update_parameters(layer.output_weights, layer.doutput_weights, layer.output_weights_momentums)
+            layer.output_bias, layer.output_bias_momentums = self._update_parameters(layer.output_bias, layer.doutput_bias, layer.output_bias_momentums)
+
+        else:
+
+            # Input weights
+            layer.input_weights = self._update_parameters(layer.input_weights, layer.dinput_weights)
+            layer.input_bias = self._update_parameters(layer.input_bias, layer.dinput_bias)
+
+            # Forget weights
+            layer.forget_weights = self._update_parameters(layer.forget_weights, layer.dforget_weights)
+            layer.forget_bias = self._update_parameters(layer.forget_bias, layer.dforget_bias)
+
+            # Candidate weights
+            layer.candidate_weights = self._update_parameters(layer.candidate_weights, layer.dcandidate_weights)
+            layer.candidate_bias = self._update_parameters(layer.candidate_bias, layer.dcandidate_bias)
+
+            # Output weights
+            layer.output_weights = self._update_parameters(layer.output_weights, layer.doutput_weights)
+            layer.output_bias = self._update_parameters(layer.output_bias, layer.doutput_bias)
+
+    def _init_dense(self, layer: DenseLayer) -> None:
+        """
+        Helper method for initializing DenseLayer momentums.
+
+        Parameters
+        ----------
+        layer : DenseLayer
+            Dense layer to initialize.
+
+        Returns
+        -------
+        None
+        """
+        dense_parms = (layer.weights, layer.biases)
+        layer.weights_momentums, layer.bias_momentums = self._init_parameters(dense_parms)
+
+    def _update_dense(self, layer: DenseLayer) -> None:
+        """
+        Helper method for updating DenseLayer parameters, momentums.
+
+        Parameters
+        ----------
+        layer : DenseLayer
+            Dense layer to update.
+
+        Returns
+        -------
+        None
+        """
+        if self.momentum:
+            layer.weights, layer.weights_momentums = self._update_parameters(layer.weights, layer.dweights, layer.weights_momentums)
+            layer.biases, layer.bias_momentums = self._update_parameters(layer.biases, layer.dbiases, layer.bias_momentums)
+        else:
+            layer.weights = self._update_parameters(layer.weights, layer.dweights)
+            layer.biases = self._update_parameters(layer.biases, layer.dbiases)
+
+    def _init_conv(self, layer: ConvolutionalLayer) -> None:
+        """
+        Helper method for initializing ConvolutionalLayer momentums.
+
+        Parameters
+        ----------
+        layer : ConvolutionalLayer
+            Convolutional layer to initialize.
+
+        Returns
+        -------
+        None
+        """
+        conv_params = (layer.kernels, layer.biases)
+        layer.kernel_momentums, layer.bias_momentums = self._init_parameters(conv_params)
+
+    def _update_conv(self, layer: ConvolutionalLayer) -> None:
+        """
+        Helper method for updating ConvolutionalLayer parameters, momentums.
+
+        Parameters
+        ----------
+        layer : ConvolutionalLayer
+            Convolutional layer to update.
+
+        Returns
+        -------
+        None
+        """
+        if self.momentum:
+            layer.kernels, layer.kernel_momentums = self._update_parameters(layer.kernels, layer.dkernels, layer.kernel_momentums)
+            layer.biases, layer.bias_momentums = self._update_parameters(layer.biases, layer.dbiases, layer.bias_momentums)
+        else:
+            layer.kernels = self._update_parameters(layer.kernels, layer.dkernels)
+            layer.biases = self._update_parameters(layer.biases, layer.dbiases)
+
+    def _init_recurrent(self, layer: RecurrentLayer) -> None:
+        """
+        Helper method for initializing RecurrentLayer momentums.
+
+        Parameters
+        ----------
+        layer : RecurrentLayer
+            Recurrent layer to initialize.
+
+        Returns
+        -------
+        None
+        """
+        recurrent_params = (layer.input_weights, layer.input_bias, layer.hidden_weights)
+        layer.input_weights_momentums, layer.input_bias_momentums, layer.hidden_weights_momentums = self._init_parameters(recurrent_params)
+
+    def _update_recurrent(self, layer: RecurrentLayer) -> None:
+        if self.momentum:
+            layer.input_weights, layer.input_weights_momentums = self._update_parameters(layer.input_weights, layer.dinput_weights, layer.input_weights_momentums)
+            layer.input_bias, layer.input_bias_momentums = self._update_parameters(layer.input_bias, layer.dinput_bias, layer.input_bias_momentums)
+            layer.hidden_weights, layer.hidden_weights_momentums = self._update_parameters(layer.hidden_weights, layer.dhidden_weights, layer.hidden_weights_momentums)
+        else:
+            layer.input_weights = self._update_parameters(layer.input_weights, layer.dinput_weights)
+            layer.input_bias = self._update_parameters(layer.input_bias, layer.dinput_bias)
+            layer.hidden_weights = self._update_parameters(layer.hidden_weights, layer.dhidden_weights)
 
     def pre_update_parameters(self) -> None:
         """
@@ -60,133 +255,34 @@ class Optimizer_SGD(Optimizer):
 
             if isinstance(layer, DenseLayer):
                 # If the layer doesn't have momentum attribute, initialize it
-                if not hasattr(layer, 'weight_momentum'):
-                    layer.weight_momentum = np.zeros_like(layer.weights)
-                    layer.bias_momentum = np.zeros_like(layer.biases)
-
-                layer.weight_momentum = self.momentum * layer.weight_momentum - self.current_learning_rate * layer.dweights
-                weight_updates = layer.weight_momentum
-
-                layer.bias_momentum = self.momentum * layer.bias_momentum - self.current_learning_rate * layer.dbiases
-                bias_updates = layer.bias_momentum
+                if not hasattr(layer, 'weights_momentums'):
+                    self._init_dense(layer)
 
             elif isinstance(layer, ConvolutionalLayer):
                 # If the layer doesn't have kernel attribute, initialize it
-                if not hasattr(layer, 'kernel_momentum'):
-                    layer.kernel_momentum = np.zeros_like(layer.kernels)
-                    layer.bias_momentum = np.zeros_like(layer.biases)
-
-                layer.kernel_momentum = self.momentum * layer.kernel_momentum - self.current_learning_rate * layer.dkernels
-                kernel_updates = layer.kernel_momentum
-
-                layer.bias_momentum = self.momentum * layer.bias_momentum - self.current_learning_rate * layer.dbiases
-                bias_updates = layer.bias_momentum
+                if not hasattr(layer, 'kernel_momentums'):
+                    self._init_conv(layer)
 
             elif isinstance(layer, RecurrentLayer):
-
                 # If the layer doesn't have momentum attributes, initialize them
                 if not hasattr(layer, 'input_weights_momentum'):
-                    layer.input_weights_momentum = np.zeros_like(layer.input_weights)
-                    layer.hidden_weights_momentum = np.zeros_like(layer.hidden_weights)
-                    layer.input_bias_momentum = np.zeros_like(layer.input_bias)
-
-                layer.input_weights_momentum = self.momentum * layer.input_weights_momentum - self.current_learning_rate * layer.dinput_weights
-                input_weights_updates = layer.input_weights_momentum
-
-                layer.hidden_weights_momentum = self.momentum * layer.hidden_weights_momentum - self.current_learning_rate * layer.dhidden_weights
-                hidden_weights_updates = layer.hidden_weights_momentum
-
-                layer.input_bias_momentum = self.momentum * layer.input_bias_momentum - self.current_learning_rate * layer.dinput_bias
-                input_bias_updates = layer.input_bias_momentum
+                    self._init_recurrent(layer)
 
             elif isinstance(layer, LSTMLayer):
-
                 if not hasattr(layer, 'input_weights_momentum'):
-                    layer.input_weights_momentums = np.zeros_like(layer.input_weights)
-                    layer.input_bias_momentums = np.zeros_like(layer.input_bias)
-                    layer.forget_weights_momentums = np.zeros_like(layer.forget_weights)
-                    layer.forget_bias_momentums = np.zeros_like(layer.forget_bias)
-                    layer.candidate_weights_momentums = np.zeros_like(layer.candidate_weights)
-                    layer.candidate_bias_momentums = np.zeros_like(layer.candidate_bias)
-                    layer.output_weights_momentums = np.zeros_like(layer.output_weights)
-                    layer.output_bias_momentums = np.zeros_like(layer.output_bias)
-
-                layer.input_weights_momentum = self.momentum * layer.input_weights_momentum - self.current_learning_rate * layer.dinput_weights
-                input_weights_updates = layer.input_weights_momentum
-                layer.input_bias_momentum = self.momentum * layer.input_bias_momentum - self.current_learning_rate * layer.dinput_bias
-                input_bias_updates = layer.input_bias_momentum
-
-                layer.forget_weights_momentum = self.momentum * layer.forget_weights_momentum - self.current_learning_rate * layer.dforget_weights
-                forget_weights_updates = layer.forget_weights_momentum
-                layer.forget_bias_momentum = self.momentum * layer.forget_bias_momentum - self.current_learning_rate * layer.dforget_bias
-                forget_bias_updates = layer.forget_bias_momentum
-
-                layer.candidate_weights_momentum = self.momentum * layer.candidate_weights_momentum - self.current_learning_rate * layer.dcandidate_weights
-                candidate_weights_updates = layer.candidate_weights_momentum
-                layer.candidate_bias_momentum = self.momentum * layer.candidate_bias_momentum - self.current_learning_rate * layer.dcandidate_bias
-                candidate_bias_updates = layer.candidate_bias_momentum
-
-                layer.output_weights_momentum = self.momentum * layer.output_weights_momentum - self.current_learning_rate * layer.doutput_weights
-                output_weights_updates = layer.output_weights_momentum
-                layer.output_bias_momentum = self.momentum * layer.output_bias_momentum - self.current_learning_rate * layer.doutput_bias
-                output_bias_updates = layer.output_bias_momentum
-
-
-        else:
-
-            # If there is no momentum update weights using vanilla gradient descent
-            if isinstance(layer, DenseLayer):
-                weight_updates = -self.current_learning_rate * layer.dweights
-                bias_updates = -self.current_learning_rate * layer.dbiases
-
-            elif isinstance(layer, ConvolutionalLayer):
-                kernel_updates = -self.current_learning_rate * layer.dkernels
-                bias_updates = -self.current_learning_rate * layer.dbiases
-
-            elif isinstance(layer, RecurrentLayer):
-                input_weights_updates = -self.current_learning_rate * layer.dinput_weights
-                hidden_weights_updates =  -self.current_learning_rate * layer.dhidden_weights
-                input_bias_updates = -self.current_learning_rate * layer.dinput_bias
-
-            elif isinstance(layer, LSTMLayer):
-                input_weights_updates = -self.current_learning_rate * layer.dinput_weights
-                input_bias_updates = -self.current_learning_rate * layer.dinput_bias
-
-                forget_weights_updates = -self.current_learning_rate * layer.dforget_weights
-                forget_bias_updates = -self.current_learning_rate * layer.dforget_bias
-
-                candidate_weights_updates = -self.current_learning_rate * layer.dcandidate_weights
-                candidate_bias_updates = -self.current_learning_rate * layer.dcandidate_bias
-
-                output_weights_updates = -self.current_learning_rate * layer.doutput_weights
-                output_bias_updates = -self.current_learning_rate * layer.doutput_bias
+                    self._init_lstm(layer)
             
-
         if isinstance(layer, DenseLayer):
-            layer.weights += weight_updates
-            layer.biases += bias_updates
+            self._update_dense(layer)
 
         elif isinstance(layer, ConvolutionalLayer):
-            layer.kernels += kernel_updates
-            layer.biases += bias_updates
+            self._update_conv(layer)
 
         elif isinstance(layer, RecurrentLayer):
-            layer.input_weights += input_weights_updates
-            layer.hidden_weights += hidden_weights_updates
-            layer.input_bias += input_bias_updates
+            self._update_recurrent(layer)
 
         elif isinstance(layer, LSTMLayer):
-            layer.input_weights += input_weights_updates
-            layer.input_bias += input_bias_updates
-
-            layer.forget_weights += forget_weights_updates
-            layer.forget_bias += forget_bias_updates
-
-            layer.candidate_weights += candidate_weights_updates
-            layer.candidate_bias += candidate_bias_updates
-
-            layer.output_weights += output_weights_updates
-            layer.output_bias += output_bias_updates
+            self._update_lstm(layer)
 
     def post_update_parameters(self) -> None:
         self.iterations += 1
