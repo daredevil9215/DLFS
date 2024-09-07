@@ -225,19 +225,7 @@ class Optimizer_Adam(Optimizer):
         self.epsilon = epsilon
         self.beta_1 = beta_1
         self.beta_2 = beta_2
-        self.iterations = 0
-
-    def pre_update_parameters(self) -> None:
-        """
-        Method for updating learning rate based on current number of iterations and decay.
-
-        Returns
-        -------
-        None
-        """
-        if self.decay:
-            # Inverse decay method
-            self.current_learning_rate = self.learning_rate  / (1 + self.iterations * self.decay) 
+        self.iterations = 0 
 
     def _init_parameters(self, params: tuple) -> list:
         """
@@ -445,6 +433,18 @@ class Optimizer_Adam(Optimizer):
         layer.input_weights, layer.input_weights_momentums, layer.input_weights_cache = self._update_parameters(layer.input_weights, layer.dinput_weights, layer.input_weights_momentums, layer.input_weights_cache)
         layer.input_bias, layer.input_bias_momentums, layer.input_bias_cache = self._update_parameters(layer.input_bias, layer.dinput_bias, layer.input_bias_momentums, layer.input_bias_cache)
         layer.hidden_weights, layer.hidden_weights_momentums, layer.hidden_weights_cache = self._update_parameters(layer.hidden_weights, layer.dhidden_weights, layer.hidden_weights_momentums, layer.hidden_weights_cache)
+
+    def pre_update_parameters(self) -> None:
+        """
+        Method for updating learning rate based on current number of iterations and decay.
+
+        Returns
+        -------
+        None
+        """
+        if self.decay:
+            # Inverse decay method
+            self.current_learning_rate = self.learning_rate  / (1 + self.iterations * self.decay)
 
     def update_layer_parameters(self, layer: Layer) -> None:
         """
